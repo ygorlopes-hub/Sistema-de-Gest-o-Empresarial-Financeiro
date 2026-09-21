@@ -1,25 +1,29 @@
 from flask import Flask, render_template, request, redirect, url_for, send_file, session
 from functools import wraps
 from flask_socketio import SocketIO, emit
-from dotenv import load_dotenv
-import os
 import io
 import pymysql
 import pandas as pd
 from datetime import date, timedelta
+import os
+from dotenv import load_dotenv
+
+# CARREGA O ARQUIVO .env AQUI
+load_dotenv()
 
 # ==========================================
 # CONFIGURAÇÃO DO APLICATIVO
 # ==========================================
 app = Flask(__name__)
-app.secret_key = 'chave_secreta_empresa_123'
+# Lê a secret key do .env também
+app.secret_key = os.getenv('SECRET_KEY', 'chave_secreta_empresa_123')
 socketio = SocketIO(app)
 
 def get_conexao():
     return pymysql.connect(
         host=os.getenv('DB_HOST', 'localhost'),
         user=os.getenv('DB_USER', 'root'),
-        password=os.getenv('DB_PASSWORD', ''),
+        password=os.getenv('DB_PASSWORD', 'blembalagens'), # Se o .env falhar, ele usa essa de garantia (opcional, se for uso local)
         database=os.getenv('DB_NAME', 'teste_empresa'),
         cursorclass=pymysql.cursors.DictCursor
     )
