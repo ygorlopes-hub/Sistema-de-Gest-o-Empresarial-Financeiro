@@ -15,4 +15,4 @@ __pycache__/
 # Configurações de editores de código
 .vscode/
 .idea/
-.env/
+.env
