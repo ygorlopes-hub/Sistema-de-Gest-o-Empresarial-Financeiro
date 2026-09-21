@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Controle de Estoque - BL Embalagens</title>
+    <!-- Frameworks CSS (Bootstrap 5 & Icons) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        /* Estilos Globais e Layout */
+        body { background-color: #f4f5f7; color: #333; }
+        .card { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .form-label { font-size: 0.8rem; font-weight: bold; color: #6c757d; }
+
+        /* Comportamento da Barra Lateral Recolhível */
+        #barraLateral { transition: all 0.3s ease; }
+        #barraLateral.sidebar-recolhida {
+            flex: 0 0 70px !important;
+            max-width: 70px !important;
+            width: 70px !important;
+            padding-left: 5px !important;
+            padding-right: 5px !important;
+        }
+        #barraLateral.sidebar-recolhida h5 { display: none !important; }
+        #barraLateral.sidebar-recolhida .list-group-item {
+            font-size: 0 !important;
+            text-align: center !important;
+            padding: 12px 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+        #barraLateral.sidebar-recolhida .list-group-item i {
+            font-size: 1.4rem !important;
+            margin: 0 !important;
+            display: inline-block !important;
+        }
+        
+        /* Expande o container que engloba a tabela e o aside preenchendo o espaço livre */
+        #barraLateral.sidebar-recolhida + * {
+            flex: 1 1 auto !important;
+            max-width: calc(100% - 70px) !important;
+            width: calc(100% - 70px) !important;
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            
+            <!-- ================= SIDEBAR (MENU LATERAL) ================= -->
+            <nav class="col-md-2 sidebar py-4" id="barraLateral">
+                <h5 class="fw-bold px-3 mb-4"><i class="bi bi-box-seam"></i> BL EMBALAGENS</h5>
+                <div class="list-group list-group-flush">
+                    <a href="#" class="list-group-item list-group-item-action bg-dark text-white rounded mx-2 mb-1">
+                        <i class="bi bi-grid-1x2"></i> Estoque
+                    </a>
+                    <a href="/relatorios" class="list-group-item list-group-item-action border-0 mx-2 mb-1">
+                        <i class="bi bi-file-earmark-bar-graph"></i> Relatórios
+                    </a>
+                    <a href="/financeiro" class="list-group-item list-group-item-action border-0 mx-2 mb-1">
+                        <i class="bi bi-currency-dollar"></i> Financeiro
+                    </a>
+                    <a href="/cheques" class="list-group-item list-group-item-action border-0 mx-2 mb-1">
+                        <i class="bi bi-card-checklist"></i> Cheques
+                    </a>
+                    <a href="/monitoramento" class="list-group-item list-group-item-action border-0 mx-2 mb-1">
+                        <i class="bi bi-shield-check"></i> Monitoramento
+                    </a>
+                    {% if session.get('usuario_nivel') == 'admin' %}
+                    <a href="/usuarios" class="list-group-item list-group-item-action border-0 mx-2 mb-1">
+                        <i class="bi bi-people-fill"></i> Usuários
+                    </a>
+                    {% endif %}
+                    <a href="#" class="list-group-item list-group-item-action border-0 mx-2 mb-1" data-bs-toggle="modal" data-bs-target="#modalAlterarSenha">
+                        <i class="bi bi-key"></i> Alterar Senha
+                    </a>
+                    <a href="/logout" class="list-group-item list-group-item-action text-danger border-0 mx-2 mt-5">
+                        <i class="bi bi-box-arrow-left"></i> Sair do Sistema
+                    </a>
+                </div>
+            </nav>
+
+            <!-- ================= CONTAINER ENGLOBANDO TABELA E ASIDE ================= -->
+            <div class="col p-0 d-flex flex-column flex-lg-row">
+                
+                <!-- Conteúdo Principal (Tabela e Cards) -->
+                <main class="flex-grow-1 py-4 px-4">
+                    <!-- Cabeçalho da Página -->
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div class="d-flex align-items-center">
+                            <button id="btnToggleSidebar" class="btn btn-outline-secondary me-3" type="button" title="Recolher/Expandir Menu">
+                                <i class="bi bi-list fs-5"></i>
+                            </button>
+                            <div>
+                                <h2 class="fw-bold mb-0">ESTOQUE EM TEMPO REAL</h2> 
+                                <p class="text-muted mb-0">Gestão e controle de estoque em tempo real.</p>
+                            </div>
+                        </div>
+                        <div>
+                            <button class="btn btn-outline-success fw-bold me-2" data-bs-toggle="modal" data-bs-target="#modalImportar">
+                                <i class="bi bi-file-earmark-excel"></i> Importar Excel
+                            </button>
+                            <button class="btn btn-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalNovoMaterial">
+                                <i class="bi bi-plus-lg"></i> Novo Material
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Cards de Resumo -->
+                    <div class="row mb-4 text-center">
+                        <div class="col-md-4">
+                            <div class="card p-3 shadow-sm border-0">
+                                <span class="text-muted small fw-bold">TOTAL ITEMS <i class="bi bi-box"></i></span>
+                                <h2 class="mb-0 fw-bold">{{ total_itens }}</h2>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card p-3 shadow-sm border-0 border-bottom border-danger border-4">
+                                <span class="text-danger small fw-bold">ABAIXO DO MÍNIMO <i class="bi bi-exclamation-triangle"></i></span>
+                                <h2 class="mb-0 fw-bold text-danger">{{ abaixo_minimo }}</h2>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card p-3 shadow-sm border-0 border-bottom border-primary border-4">
+                                <span class="text-primary small fw-bold">ESTOQUE ADEQUADO <i class="bi bi-check-circle"></i></span>
+                                <h2 class="mb-0 fw-bold text-primary">{{ estoque_adequado }}</h2>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela de Listagem de Materiais -->
+                    <div class="card">
+                        <div class="card-header bg-dark text-white py-3">
+                            <h6 class="mb-0">Listagem de Materiais</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0 align-middle">
+                                <thead class="table-light text-muted small">
+                                    <tr>
+                                        <th>PRODUTO</th>
+                                        <th>ESTOQUE ATUAL</th>
+                                        <th>ESTOQUE MÍNIMO</th>
+                                        <th>STATUS DO SISTEMA</th>
+                                        <th>AÇÕES</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for p in produtos %}
+                                    <tr>
+                                        <td class="fw-bold">{{ p.produto }}</td>
+                                        <td>{{ p.quantidade }}</td>
+                                        <td>{{ p.estoque_minimo }}</td>
+                                        <td><span class="badge bg-{{ p.cor }}">{{ p.alerta }}</span></td>
+                                        <td>
+                                            <form action="/deletar" method="POST" class="m-0 p-0">
+                                                <input type="hidden" name="produto" value="{{ p.produto }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger border-0" onclick="return confirm('Tem certeza que deseja excluir este material?');" title="Excluir">
+                                                    <i class="bi bi-trash3"></i>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </main>
+
+                <!-- Painel Lateral (Ações Rápidas de Estoque) -->
+                <aside class="py-4 px-3" style="width: 100%; max-width: 340px; min-width: 300px;">
+                    <!-- Card Atualizar Estoque -->
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h6 class="fw-bold mb-3"><i class="bi bi-arrow-clockwise"></i> Atualizar Estoque</h6>
+                            <form action="/atualizar" method="POST">
+                                <label class="form-label">PRODUTO</label>
+                                <input list="lista_produtos" name="produto" class="form-control bg-light mb-3" required placeholder="Selecione um produto...">
+                                
+                                <label class="form-label">NOVA QUANTIDADE</label>
+                                <input type="number" name="quantidade" class="form-control bg-light mb-3" required placeholder="Ex: 200">
+                                
+                                <button type="submit" class="btn btn-dark w-100 fw-bold">ATUALIZAR NO BANCO</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Card Retirar do Estoque -->
+                    <div class="card">
+                        <div class="card-body border-top border-danger border-4 rounded">
+                            <h6 class="fw-bold text-danger mb-3"><i class="bi bi-cart-x"></i> Retirar do Estoque</h6>
+                            <form action="/retirar" method="POST">
+                                <label class="form-label">PRODUTO</label>
+                                <input list="lista_produtos" name="produto" class="form-control bg-light mb-3" required placeholder="Selecione um produto...">
+                                
+                                <label class="form-label">QTD. A RETIRAR</label>
+                                <input type="number" name="quantidade" class="form-control bg-light mb-3" required min="1" placeholder="Ex: 5">
+                                
+                                <button type="submit" class="btn btn-danger w-100 fw-bold">REGISTRAR RETIRADA</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Datalist de Produtos -->
+                    <datalist id="lista_produtos">
+                        {% for p in produtos %}
+                            <option value="{{ p.produto }}">
+                        {% endfor %}
+                    </datalist>
+                </aside>
+
+            </div>
+            
+        </div>
+    </div>
+
+    <!-- ================= MODAIS DO SISTEMA ================= -->
+    <!-- Modal Novo Material -->
+    <div class="modal fade" id="modalNovoMaterial" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-box-seam"></i> Cadastrar Novo Material</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form action="/adicionar_material" method="POST">
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Nome do Produto</label>
+                            <input type="text" name="produto" class="form-control bg-light" required placeholder="Ex: Caixa de Papelão M">
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Estoque Atual</label>
+                                <input type="number" name="quantidade" class="form-control bg-light" required min="0" placeholder="Ex: 50">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Estoque Mínimo</label>
+                                <input type="number" name="estoque_minimo" class="form-control bg-light" required min="0" placeholder="Ex: 10">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Status Inicial</label>
+                            <select name="status" class="form-select bg-light">
+                                <option value="Ativo">Ativo</option>
+                                <option value="Inativo">Inativo</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-dark fw-bold">Salvar Material</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Importar Excel -->
+    <div class="modal fade" id="modalImportar" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-excel"></i> Importar Planilha</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/importar_excel" method="POST" enctype="multipart/form-data">
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Selecione o arquivo (.xlsx)</label>
+                            <input type="file" name="documento_excel" class="form-control" accept=".xlsx" required>
+                        </div>
+                        <p class="text-muted small">Certifique-se de que sua planilha tenha as colunas: <strong>Produto</strong>, <strong>Quantidade</strong> e <strong>Estoque Minimo</strong>.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-success fw-bold w-100">Iniciar Importação</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Alterar Senha -->
+    <div class="modal fade" id="modalAlterarSenha" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-key-fill"></i> Alterar Minha Senha</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/alterar_senha" method="POST">
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Senha Atual</label>
+                            <input type="password" name="senha_atual" class="form-control bg-light" required placeholder="Digite sua senha atual">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Nova Senha</label>
+                            <input type="password" name="nova_senha" class="form-control bg-light" required placeholder="Digite a nova senha">
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-dark fw-bold">Salvar Nova Senha</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= SCRIPTS JS ================= -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Script de Recolhimento da Sidebar -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const btnToggle = document.getElementById('btnToggleSidebar');
+            const barraLateral = document.getElementById('barraLateral');
+            
+            if (barraLateral) {
+                barraLateral.classList.add('sidebar-recolhida');
+                if (btnToggle) {
+                    btnToggle.addEventListener('click', function() {
+                        barraLateral.classList.toggle('sidebar-recolhida');
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

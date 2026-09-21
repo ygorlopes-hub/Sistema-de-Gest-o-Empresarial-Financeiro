@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Controle de Cheques - BL Embalagens</title>
+    <!-- Frameworks CSS (Bootstrap 5 & Icons) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        /* Estilos Globais e Layout */
+        body { background-color: #f4f5f7; color: #333; }
+        .card { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+
+        /* Otimização para 100% de Zoom: Compacta a tabela e espaçamentos */
+        .table td, .table th {
+            padding: 0.5rem 0.4rem !important; /* Reduz as margens internas das células */
+            font-size: 0.88rem; /* Letra levemente mais compacta e legível */
+        }
+        
+        /* Ajusta os inputs de filtro nas colunas para caberem sem esticar a tela */
+        .table input.form-control-sm {
+            font-size: 0.78rem;
+            padding: 0.2rem 0.3rem;
+        }
+
+        /* Comportamento da Barra Lateral Recolhível */
+        #barraLateral { transition: all 0.3s ease; }
+        #barraLateral.sidebar-recolhida {
+            flex: 0 0 70px !important;
+            max-width: 70px !important;
+            width: 70px !important;
+            padding-left: 5px !important;
+            padding-right: 5px !important;
+        }
+        #barraLateral.sidebar-recolhida h5 { display: none !important; }
+        #barraLateral.sidebar-recolhida .list-group-item {
+            font-size: 0 !important;
+            text-align: center !important;
+            padding: 12px 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+        #barraLateral.sidebar-recolhida .list-group-item i {
+            font-size: 1.4rem !important;
+            margin: 0 !important;
+            display: inline-block !important;
+        }
+        #barraLateral.sidebar-recolhida + * {
+            flex: 1 1 auto !important;
+            max-width: calc(100% - 70px) !important;
+            width: calc(100% - 70px) !important;
+            transition: all 0.3s ease;
+        }
+
+        /* Estilos Globais e Layout */
+        body { background-color: #f4f5f7; color: #333; }
+        .card { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+
+        /* Comportamento da Barra Lateral Recolhível */
+        #barraLateral { transition: all 0.3s ease; }
+        #barraLateral.sidebar-recolhida {
+            flex: 0 0 70px !important;
+            max-width: 70px !important;
+            width: 70px !important;
+            padding-left: 5px !important;
+            padding-right: 5px !important;
+        }
+        #barraLateral.sidebar-recolhida h5 { display: none !important; }
+        #barraLateral.sidebar-recolhida .list-group-item {
+            font-size: 0 !important;
+            text-align: center !important;
+            padding: 12px 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+        #barraLateral.sidebar-recolhida .list-group-item i {
+            font-size: 1.4rem !important;
+            margin: 0 !important;
+            display: inline-block !important;
+        }
+        /* Expande o painel direito preenchendo o espaço livre */
+        #barraLateral.sidebar-recolhida + * {
+            flex: 1 1 auto !important;
+            max-width: calc(100% - 70px) !important;
+            width: calc(100% - 70px) !important;
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            
+            <!-- ================= SIDEBAR (MENU LATERAL) ================= -->
+            <nav class="col-md-2 sidebar py-4" id="barraLateral">
+                <h5 class="fw-bold px-3 mb-4"><i class="bi bi-box-seam"></i> BL EMBALAGENS</h5>
+                <div class="list-group list-group-flush">
+                    <a href="/" class="list-group-item list-group-item-action border-0 mx-2 mb-1"><i class="bi bi-grid-1x2"></i> Estoque</a>
+                    <a href="/relatorios" class="list-group-item list-group-item-action border-0 mx-2 mb-1"><i class="bi bi-file-earmark-bar-graph"></i> Relatórios</a>
+                    <a href="/financeiro" class="list-group-item list-group-item-action border-0 mx-2 mb-1"><i class="bi bi-currency-dollar"></i> Financeiro</a>
+                    <a href="/cheques" class="list-group-item list-group-item-action bg-dark text-white rounded mx-2 mb-1"><i class="bi bi-card-checklist"></i> Cheques</a>
+                    <a href="/monitoramento" class="list-group-item list-group-item-action border-0 mx-2 mb-1"><i class="bi bi-shield-check"></i> Monitoramento</a>
+                    
+                    {% if session.get('usuario_nivel') == 'admin' %}
+                    <a href="/usuarios" class="list-group-item list-group-item-action border-0 mx-2 mb-1">
+                        <i class="bi bi-people-fill"></i> Usuários
+                    </a>
+                    {% endif %}
+                    
+                    <a href="#" class="list-group-item list-group-item-action border-0 mx-2 mb-1" data-bs-toggle="modal" data-bs-target="#modalAlterarSenha"><i class="bi bi-key"></i> Alterar Senha</a>
+                    <a href="/logout" class="list-group-item list-group-item-action text-danger border-0 mx-2 mt-5"><i class="bi bi-box-arrow-left"></i> Sair do Sistema</a>
+                </div>
+            </nav>
+
+            <!-- ================= CONTEÚDO PRINCIPAL ================= -->
+            <main class="col-md-10 py-4 px-4">
+                
+                <!-- Cabeçalho da Página -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center">
+                        <button id="btnToggleSidebar" class="btn btn-outline-secondary me-3" type="button" title="Recolher/Expandir Menu">
+                            <i class="bi bi-list fs-5"></i>
+                        </button>
+                        <div>
+                            <h2 class="fw-bold mb-0">Controle de Cheques</h2>
+                            <p class="text-muted mb-0">Gestão e digitalização de cheques recebidos.</p>
+                        </div>
+                    </div>
+                    <div>
+                        <a href="/exportar_excel_cheques?pesquisa={{ filtros.pesquisa }}&banco={{ filtros.banco }}&status={{ filtros.status }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&filtro_emissor={{ filtros.filtro_emissor }}&filtro_numero_cheque={{ filtros.filtro_numero_cheque }}&filtro_destino={{ filtros.filtro_destino }}&filtro_rec_inicio={{ filtros.filtro_rec_inicio }}&filtro_rec_fim={{ filtros.filtro_rec_fim }}&filtro_venc_inicio={{ filtros.filtro_venc_inicio }}&filtro_venc_fim={{ filtros.filtro_venc_fim }}&filtro_valor_min={{ filtros.filtro_valor_min }}&filtro_valor_max={{ filtros.filtro_valor_max }}" class="btn btn-outline-primary fw-bold me-2">
+                            <i class="bi bi-download"></i> Exportar Filtrados
+                        </a>
+                        <button class="btn btn-outline-success fw-bold me-2" data-bs-toggle="modal" data-bs-target="#modalImportarCheques">
+                            <i class="bi bi-file-earmark-excel"></i> Importar Excel
+                        </button>
+                        <button class="btn btn-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalNovoCheque">
+                            <i class="bi bi-plus-lg"></i> Novo Cheque
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Cards de Resumo por Status -->
+                <div class="row mb-4 text-center">
+                    <div class="col-md-3">
+                        <div class="card p-3 shadow-sm border-0 border-bottom border-secondary border-4">
+                            <span class="text-secondary small fw-bold">PENDENTES <i class="bi bi-clock-history"></i></span>
+                            <h4 class="mb-0 fw-bold text-secondary">{{ resumo.pendentes }}</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card p-3 shadow-sm border-0 border-bottom border-primary border-4">
+                            <span class="text-primary small fw-bold">REPASSADOS <i class="bi bi-send"></i></span>
+                            <h4 class="mb-0 fw-bold text-primary">{{ resumo.repassados }}</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card p-3 shadow-sm border-0 border-bottom border-success border-4">
+                            <span class="text-success small fw-bold">COMPENSADOS <i class="bi bi-check-circle"></i></span>
+                            <h4 class="mb-0 fw-bold text-success">{{ resumo.compensados }}</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card p-3 shadow-sm border-0 border-bottom border-danger border-4">
+                            <span class="text-danger small fw-bold">DEVOLVIDOS <i class="bi bi-x-circle"></i></span>
+                            <h4 class="mb-0 fw-bold text-danger">{{ resumo.devolvidos }}</h4>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gráfico de Distribuição -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <div class="card p-3 shadow-sm border-0 d-flex flex-column align-items-center">
+                            <h6 class="fw-bold text-muted mb-3 align-self-start"><i class="bi bi-pie-chart-fill text-dark"></i> Distribuição de Status (Filtro Atual)</h6>
+                            <div style="height: 250px; width: 100%; max-width: 500px;">
+                                <canvas id="graficoCheques"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formulário de Filtros Principais -->
+                <form action="/cheques" method="GET" id="formFiltros" class="card mb-4 shadow-sm border-0">
+                    <div class="card-body p-3">
+                        <div class="row g-2 mb-3 justify-content-center">
+                            <div class="col-md-5">
+                                <input type="text" name="pesquisa" value="{{ filtros.pesquisa }}" class="form-control bg-light border-secondary" placeholder="🔍 Buscar Cliente, Banco ou Status...">
+                            </div>
+                            <div class="col-md-4">
+                                <select name="status" class="form-select bg-light border-secondary">
+                                    <option value="">📊 Todos os Status</option>
+                                    <option value="Pendente" {% if filtros.status == 'Pendente' %}selected{% endif %}>Pendentes</option>
+                                    <option value="Compensado" {% if filtros.status == 'Compensado' %}selected{% endif %}>Compensados</option>
+                                    <option value="Repassado" {% if filtros.status == 'Repassado' %}selected{% endif %}>Repassados</option>
+                                    <option value="Devolvido" {% if filtros.status == 'Devolvido' %}selected{% endif %}>Devolvidos</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-12 d-flex justify-content-center gap-2">
+                                <a href="/cheques" class="btn btn-secondary fw-bold px-4"><i class="bi bi-eraser-fill"></i> Limpar Filtros</a>
+                                <button type="submit" class="btn btn-primary fw-bold px-4"><i class="bi bi-search"></i> Pesquisar</button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Contador de Registros -->
+                <div class="d-flex justify-content-end mb-2">
+                    <span class="text-muted fw-bold">Total Encontrado: <span id="contador-total" class="badge bg-primary fs-6">{{ total_registros }}</span></span>
+                </div>
+
+                <!-- Tabela de Dados dos Cheques -->
+                <div class="card mb-3">
+                    <div class="card-body p-0 table-responsive">
+                        <table class="table table-hover mb-0 align-middle" id="tabelaCheques">
+                            <thead class="table-light text-muted small">
+                                <tr>
+                                    <th>BANCO</th>
+                                    <th>Nº CHEQUE</th>
+                                    <th>CLIENTE / EMISSOR</th>
+                                    <th>RECEBIMENTO</th>
+                                    <th>
+                                        <span class="d-inline-flex align-items-center gap-1">
+                                            VENCIMENTO
+                                            <a href="/cheques?page=1&pesquisa={{ filtros.pesquisa }}&banco={{ filtros.banco }}&status={{ filtros.status }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&filtro_emissor={{ filtros.filtro_emissor }}&filtro_numero_cheque={{ filtros.filtro_numero_cheque }}&filtro_destino={{ filtros.filtro_destino }}&filtro_rep_inicio={{ filtros.filtro_rep_inicio }}&filtro_rep_fim={{ filtros.filtro_rep_fim }}&filtro_rec_inicio={{ filtros.filtro_rec_inicio }}&filtro_rec_fim={{ filtros.filtro_rec_fim }}&filtro_venc_inicio={{ filtros.filtro_venc_inicio }}&filtro_venc_fim={{ filtros.filtro_venc_fim }}&filtro_valor_min={{ filtros.filtro_valor_min }}&filtro_valor_max={{ filtros.filtro_valor_max }}&ordem={% if filtros.ordem == 'venc_asc' %}venc_desc{% else %}venc_asc{% endif %}" 
+                                            class="btn btn-sm btn-light border py-0 px-1 text-dark" 
+                                            title="Ordenar por Vencimento (Próximos)">
+                                                <i class="bi bi-arrow-down-up"></i>
+                                            </a>
+                                        </span>
+                                    </th>
+                                    <input type="hidden" name="ordem" value="{{ filtros.ordem }}">
+                                    <th>
+                                        VALOR<br>
+                                        <span class="text-success small fw-bold">Total: R$ {{ "{:,.2f}".format(resumo.valor_total).replace(',', 'X').replace('.', ',').replace('X', '.') }}</span>
+                                    </th>
+                                    <th>DESTINO / REPASSE</th>
+                                    <th>OBS</th>
+                                    <th>STATUS</th>
+                                    <th class="text-end pe-4">AÇÕES</th>
+                                </tr>
+                                
+                                <!-- Linha de Filtros de Coluna -->
+                                <tr class="bg-light">
+                                    <th></th>
+                                    <th>
+                                        <input type="text" name="filtro_numero_cheque" form="formFiltros" value="{{ filtros.filtro_numero_cheque }}" class="form-control form-control-sm" placeholder="Nº cheque..." onchange="document.getElementById('formFiltros').submit()">
+                                    </th>
+                                    <th>
+                                        <input type="text" name="filtro_emissor" form="formFiltros" value="{{ filtros.filtro_emissor }}" class="form-control form-control-sm" placeholder="Filtrar emissor..." onchange="document.getElementById('formFiltros').submit()">
+                                    </th>
+                                    <th>
+                                        <div class="d-flex gap-1">
+                                            <input type="date" name="filtro_rec_inicio" form="formFiltros" value="{{ filtros.filtro_rec_inicio }}" class="form-control form-control-sm" onchange="document.getElementById('formFiltros').submit()" title="De">
+                                            <input type="date" name="filtro_rec_fim" form="formFiltros" value="{{ filtros.filtro_rec_fim }}" class="form-control form-control-sm" onchange="document.getElementById('formFiltros').submit()" title="Até">
+                                        </div>
+                                    </th>
+                                    <th>
+                                        <div class="d-flex gap-1">
+                                            <input type="date" name="filtro_venc_inicio" form="formFiltros" value="{{ filtros.filtro_venc_inicio }}" class="form-control form-control-sm" onchange="document.getElementById('formFiltros').submit()" title="De">
+                                            <input type="date" name="filtro_venc_fim" form="formFiltros" value="{{ filtros.filtro_venc_fim }}" class="form-control form-control-sm" onchange="document.getElementById('formFiltros').submit()" title="Até">
+                                        </div>
+                                    </th>
+                                    <th>
+                                        <div class="d-flex gap-1">
+                                            <input type="number" step="0.01" name="filtro_valor_min" form="formFiltros" value="{{ filtros.filtro_valor_min }}" class="form-control form-control-sm" placeholder="De R$" onchange="document.getElementById('formFiltros').submit()">
+                                            <input type="number" step="0.01" name="filtro_valor_max" form="formFiltros" value="{{ filtros.filtro_valor_max }}" class="form-control form-control-sm" placeholder="Até R$" onchange="document.getElementById('formFiltros').submit()">
+                                        </div>
+                                    </th>
+                                    <th>
+                                        <div class="d-flex flex-column gap-1">
+                                            <input type="text" name="filtro_destino" form="formFiltros" value="{{ filtros.filtro_destino }}" class="form-control form-control-sm" placeholder="Filtrar destino..." onchange="document.getElementById('formFiltros').submit()">
+                                            <div class="d-flex gap-1">
+                                                <input type="date" name="filtro_rep_inicio" form="formFiltros" value="{{ filtros.filtro_rep_inicio }}" class="form-control form-control-sm" onchange="document.getElementById('formFiltros').submit()" title="Repasse De">
+                                                <input type="date" name="filtro_rep_fim" form="formFiltros" value="{{ filtros.filtro_rep_fim }}" class="form-control form-control-sm" onchange="document.getElementById('formFiltros').submit()" title="Repasse Até">
+                                            </div>
+                                        </div>
+                                    </th>
+                                    <th></th> <!-- Espaço em branco para a coluna OBS -->
+                                    <th></th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if not cheques %}
+                                <tr>
+                                    <td colspan="9" class="text-center py-4 text-muted">Nenhum cheque encontrado com os filtros atuais.</td>
+                                </tr>
+                                {% endif %}
+                                {% for ch in cheques %}
+                                <tr>
+                                    <td class="fw-bold">{{ ch.banco }}</td>
+                                    <td class="fw-bold">{{ ch.numero_cheque }}</td>
+                                    <td>
+                                        <div class="fw-bold text-dark">{{ ch.cliente }}</div>
+                                        {% if ch.emissor and ch.emissor != ch.cliente %}
+                                            <div class="small text-muted">Emissor: {{ ch.emissor }}</div>
+                                        {% endif %}
+                                        {% if ch.cnpj_cpf %}
+                                            <div class="small text-muted"><i class="bi bi-person-vcard"></i> {{ ch.cnpj_cpf }}</div>
+                                        {% endif %}
+                                    </td>
+                                    
+                                    <td>
+                                        {{ ch.data_recebimento.strftime('%d/%m/%Y') if ch.data_recebimento else '<span class="text-muted">-</span>'|safe }}
+                                    </td>
+                                    
+                                    <td class="fw-bold">
+                                        {{ ch.data_bom_para.strftime('%d/%m/%Y') if ch.data_bom_para else '<span class="text-muted">-</span>'|safe }}
+                                    </td>
+                                    
+                                    <td class="fw-bold text-success">R$ {{ "{:,.2f}".format(ch.valor).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+                                    
+                                    <td>
+                                        {% if ch.destino %}
+                                            <div class="fw-bold text-dark">{{ ch.destino }}</div>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                        
+                                        {% if ch.data_repasse %}
+                                            <div class="small text-primary mt-1">
+                                                <i class="bi bi-calendar-check"></i> Repassado: {{ ch.data_repasse.strftime('%d/%m/%Y') }}
+                                            </div>
+                                        {% endif %}
+                                        
+                                        {% if ch.info_repasse and ch.info_repasse != 'nan' %}
+                                            <div class="small text-muted mt-1">{{ ch.info_repasse }}</div>
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        {% if ch.observacoes and ch.observacoes != 'nan' %}
+                                            <span class="small text-secondary">{{ ch.observacoes }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    
+                                    <td><span class="badge bg-{{ ch.cor }}">{{ ch.status_cheque }}</span></td>
+                                    <td class="text-end pe-3 text-nowrap">
+                                        <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#modalDetalhes{{ ch.id }}" title="Ver Detalhes"><i class="bi bi-eye-fill"></i></button>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditar{{ ch.id }}" title="Editar Cheque"><i class="bi bi-pencil-fill"></i></button>
+                                        <form action="/atualizar_status_cheque/{{ ch.id }}/Compensado" method="POST" class="d-inline"><button type="submit" class="btn btn-sm btn-outline-success" title="Marcar Compensado"><i class="bi bi-check-circle-fill"></i></button></form>
+                                        <form action="/atualizar_status_cheque/{{ ch.id }}/Repassado" method="POST" class="d-inline"><button type="submit" class="btn btn-sm btn-outline-primary" title="Marcar Repassado"><i class="bi bi-send-fill"></i></button></form>
+                                        <form action="/atualizar_status_cheque/{{ ch.id }}/Devolvido" method="POST" class="d-inline"><button type="submit" class="btn btn-sm btn-outline-danger" title="Marcar Devolvido"><i class="bi bi-x-circle-fill"></i></button></form>
+                                        <form action="/atualizar_status_cheque/{{ ch.id }}/Pendente" method="POST" class="d-inline"><button type="submit" class="btn btn-sm btn-outline-secondary" title="Marcar Pendente"><i class="bi bi-arrow-counterclockwise"></i></button></form>
+                                        {% if session.get('usuario_nivel') == 'admin' %}
+                                        <form action="/deletar_cheque/{{ ch.id }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir este cheque?');"><button type="submit" class="btn btn-sm btn-dark" title="Excluir"><i class="bi bi-trash-fill"></i></button></form>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Paginação Atualizada -->
+                {% if total_pages > 1 %}
+                <nav aria-label="Navegação de páginas">
+                    <ul class="pagination justify-content-center">
+                        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                            <a class="page-link" href="/cheques?page={{ page - 1 }}&pesquisa={{ filtros.pesquisa }}&banco={{ filtros.banco }}&status={{ filtros.status }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&filtro_emissor={{ filtros.filtro_emissor }}&filtro_numero_cheque={{ filtros.filtro_numero_cheque }}&filtro_destino={{ filtros.filtro_destino }}&filtro_rec_inicio={{ filtros.filtro_rec_inicio }}&filtro_rec_fim={{ filtros.filtro_rec_fim }}&filtro_venc_inicio={{ filtros.filtro_venc_inicio }}&filtro_venc_fim={{ filtros.filtro_venc_fim }}&filtro_valor_min={{ filtros.filtro_valor_min }}&filtro_valor_max={{ filtros.filtro_valor_max }}&ordem={{ filtros.ordem }}">Anterior</a>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link text-dark fw-bold bg-light">Página {{ page }} de {{ total_pages }}</span>
+                        </li>
+                        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                            <a class="page-link" href="/cheques?page={{ page + 1 }}&pesquisa={{ filtros.pesquisa }}&banco={{ filtros.banco }}&status={{ filtros.status }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&filtro_emissor={{ filtros.filtro_emissor }}&filtro_numero_cheque={{ filtros.filtro_numero_cheque }}&filtro_destino={{ filtros.filtro_destino }}&filtro_rec_inicio={{ filtros.filtro_rec_inicio }}&filtro_rec_fim={{ filtros.filtro_rec_fim }}&filtro_venc_inicio={{ filtros.filtro_venc_inicio }}&filtro_venc_fim={{ filtros.filtro_venc_fim }}&filtro_valor_min={{ filtros.filtro_valor_min }}&filtro_valor_max={{ filtros.filtro_valor_max }}&ordem={{ filtros.ordem }}">Próxima</a>
+                        </li>
+                    </ul>
+                </nav>
+                {% endif %}
+
+            </main>
+        </div>
+    </div>
+
+    <!-- ================= MODAIS DE DETALHES E EDIÇÃO ================= -->
+    {% for ch in cheques %}
+    <!-- Modal Detalhes -->
+    <div class="modal fade" id="modalDetalhes{{ ch.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold">Detalhes do Cheque - Nº {{ ch.numero_cheque }}</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Banco</small>
+                            <strong class="text-dark">{{ ch.banco }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Número do Cheque</small>
+                            <strong class="text-dark">{{ ch.numero_cheque }}</strong>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <small class="text-muted d-block">Cliente</small>
+                        <strong class="text-dark">{{ ch.cliente }}</strong>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Emissor</small>
+                            <strong class="text-dark">{{ ch.emissor }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">CNPJ / CPF</small>
+                            <strong class="text-dark">{{ ch.cnpj_cpf if ch.cnpj_cpf else '-' }}</strong>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Recebimento</small>
+                            <strong class="text-dark">{{ ch.data_recebimento.strftime('%d/%m/%Y') if ch.data_recebimento else '-' }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Vencimento</small>
+                            <strong class="text-primary">{{ ch.data_bom_para.strftime('%d/%m/%Y') if ch.data_bom_para else '-' }}</strong>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Valor</small>
+                            <strong class="text-success fs-5">R$ {{ "%.2f"|format(ch.valor) }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Data Repasse</small>
+                            <strong class="text-dark">{{ ch.data_repasse.strftime('%d/%m/%Y') if ch.data_repasse else '-' }}</strong>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <small class="text-muted d-block">Destino</small>
+                        <strong class="text-dark">{{ ch.destino if ch.destino else '-' }}</strong>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <small class="text-muted d-block">Informações do Repasse</small>
+                        <div class="p-2 bg-warning bg-opacity-10 border border-warning rounded text-dark">
+                            {{ ch.info_repasse if ch.info_repasse and ch.info_repasse != 'nan' else 'Nenhum repasse registrado.' }}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-0">
+                        <small class="text-muted d-block">Observações Gerais</small>
+                        <div class="p-2 bg-light border rounded text-dark">
+                            {{ ch.observacoes if ch.observacoes and ch.observacoes != 'nan' else 'Nenhuma observação registrada.' }}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Editar -->
+    <div class="modal fade" id="modalEditar{{ ch.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold">Editar Cheque - Nº {{ ch.numero_cheque }}</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/editar_cheque/{{ ch.id }}" method="POST">
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">Data Recebimento</label>
+                                <input type="date" name="data_recebimento" class="form-control" value="{{ ch.data_recebimento.strftime('%Y-%m-%d') if ch.data_recebimento else '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">Cliente</label>
+                                <input type="text" name="cliente" class="form-control" list="listaClientes" value="{{ ch.cliente or '' }}" autocomplete="off">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">Emissor</label>
+                                <input type="text" name="emissor" class="form-control" list="listaEmissores" value="{{ ch.emissor or '' }}" autocomplete="off">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">CNPJ / CPF</label>
+                                <input type="text" name="cnpj_cpf" class="form-control" list="listaCnpjs" value="{{ ch.cnpj_cpf or '' }}" autocomplete="off">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">Banco</label>
+                                <input type="text" name="banco" class="form-control" list="listaBancos" value="{{ ch.banco or '' }}" autocomplete="off">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">Nº do Cheque</label>
+                                <input type="text" name="numero_cheque" class="form-control" value="{{ ch.numero_cheque or '' }}" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">Venc. (Bom Para)</label>
+                                <input type="date" name="data_bom_para" class="form-control" value="{{ ch.data_bom_para.strftime('%Y-%m-%d') if ch.data_bom_para else '' }}" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">Valor (R$)</label>
+                                <input type="number" step="0.01" name="valor" class="form-control" value="{{ ch.valor or '' }}" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">Destino</label>
+                                <input type="text" name="destino" class="form-control" list="listaDestinos" value="{{ ch.destino or '' }}" autocomplete="off">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold small">Data Repasse</label>
+                                <input type="date" name="data_repasse" class="form-control" value="{{ ch.data_repasse.strftime('%Y-%m-%d') if ch.data_repasse else '' }}">
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold small text-primary">Informações do Repasse</label>
+                                <textarea name="info_repasse" class="form-control border-primary" rows="2">{{ ch.info_repasse if ch.info_repasse and ch.info_repasse != 'nan' else '' }}</textarea>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold small">Observações Gerais</label>
+                                <input type="text" name="observacoes" class="form-control" value="{{ ch.observacoes if ch.observacoes and ch.observacoes != 'nan' else '' }}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary fw-bold">Salvar Alterações</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Modal Importar Excel -->
+    <div class="modal fade" id="modalImportarCheques" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold">Importar do Documentalize</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/importar_excel_cheques" method="POST" enctype="multipart/form-data">
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Arquivo Excel (.xlsx)</label>
+                            <input type="file" name="documento_excel" class="form-control" accept=".xlsx" required>
+                        </div>
+                        <p class="text-muted small">Cabeçalhos suportados: <strong>DATA, BANCO, Nº CHEQUE, CLIENTE, EMISSOR, CNPJ/CPF, VENC., VALOR, DESTINO, DT REPAS, OBS</strong></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-success fw-bold w-100">Processar Cheques</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Alterar Senha -->
+    <div class="modal fade" id="modalAlterarSenha" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-key-fill"></i> Alterar Minha Senha</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/alterar_senha" method="POST">
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Senha Atual</label>
+                            <input type="password" name="senha_atual" class="form-control bg-light" required placeholder="Digite sua senha atual">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Nova Senha</label>
+                            <input type="password" name="nova_senha" class="form-control bg-light" required placeholder="Digite a nova senha">
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-dark fw-bold">Salvar Nova Senha</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL NOVO CHEQUE (MÚLTIPLOS) ================= -->
+    <div class="modal fade" id="modalNovoCheque" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content bg-light">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold">Cadastrar Cheques (Lado a Lado)</h5>
+                    <div class="ms-4 d-flex align-items-center">
+                        <label class="me-2 mb-0 small text-light">Quantidade de Cheques:</label>
+                        <select id="select-qtd-cheques" class="form-select form-select-sm" style="width: 70px;">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="7">7</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/adicionar_cheque" method="POST">
+                    <div class="modal-body p-3">
+                        <!-- Listas de Sugestões (Invisíveis) -->
+                        <datalist id="listaClientes">{% for cli in clientes %}<option value="{{ cli }}">{% endfor %}</datalist>
+                        <datalist id="listaEmissores">{% for emissor in lista_emissores %}<option value="{{ emissor.nome }}">{% endfor %}</datalist>
+                        <datalist id="listaBancos">{% for b in bancos %}<option value="{{ b }}">{% endfor %}</datalist>
+                        <datalist id="listaDestinos">{% for d in destinos %}<option value="{{ d }}">{% endfor %}</datalist>
+                        
+                        <!-- Container Flexbox Horizontal de Cheques -->
+                        <div class="d-flex flex-nowrap overflow-auto pb-3 gap-3 px-2" id="container-cheques">
+                            <!-- Injetado dinamicamente via JavaScript -->
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-white border-top">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-dark fw-bold">Salvar Todos os Cheques</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= DADOS E SCRIPTS JS ================= -->
+    <script id="dadosResumo" type="application/json">
+        [{{ resumo.pendentes }}, {{ resumo.repassados }}, {{ resumo.compensados }}, {{ resumo.devolvidos }}]
+    </script>
+    <script id="dadosEmissores" type="application/json">
+        {{ lista_emissores|tojson if lista_emissores else '[]' }}
+    </script>
+
+    <!-- Bootstrap Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Socket.IO para Atualização em Tempo Real -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        var socket = io();
+        socket.on('atualizar_tela', function() {
+            var modalAberto = document.querySelector('.modal.show');
+            if (modalAberto) {
+                modalAberto.addEventListener('hidden.bs.modal', function () {
+                    location.reload();
+                }, { once: true });
+            } else {
+                location.reload();
+            }
+        });
+    </script>
+
+    <!-- Configuração e Renderização do Gráfico de Rosca (Chart.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const dadosBackend = JSON.parse(document.getElementById('dadosResumo').textContent);
+        const ctxCheques = document.getElementById('graficoCheques').getContext('2d');
+        
+        new Chart(ctxCheques, {
+            type: 'doughnut',
+            data: {
+                labels: ['Pendentes', 'Repassados', 'Compensados', 'Devolvidos'],
+                datasets: [{
+                    data: dadosBackend,
+                    backgroundColor: ['#6c757d', '#0d6efd', '#198754', '#dc3545'],
+                    borderWidth: 2,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { font: { weight: 'bold' } }
+                    }
+                },
+                cutout: '65%'
+            }
+        });
+    </script>
+
+    <!-- Script de Gestão Dinâmica do Modal de Múltiplos Cheques -->
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const emissoresData = JSON.parse(document.getElementById('dadosEmissores').textContent);
+        const emissorMap = {};
+        emissoresData.forEach(item => { 
+            if (item.nome) emissorMap[item.nome.trim()] = item.cnpj_cpf || ''; 
+        });
+
+        const containerCheques = document.getElementById('container-cheques');
+        const selectQtd = document.getElementById('select-qtd-cheques');
+
+        function renderizarFormsCheques(qtd) {
+            if (!containerCheques) return;
+            containerCheques.innerHTML = '';
+            for (let i = 1; i <= qtd; i++) {
+                const cardHTML = `
+                    <div class="card shadow-sm border-secondary flex-shrink-0" style="width: 320px;">
+                        <div class="card-header bg-secondary text-white fw-bold py-2 d-flex justify-content-between align-items-center">
+                            <span>Cheque #${i}</span>
+                        </div>
+                        <div class="card-body p-3 bg-white">
+                            <div class="row g-2">
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small mb-1">Data Recebimento</label>
+                                    <input type="date" name="data_recebimento[]" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small mb-1">Cliente</label>
+                                    <input type="text" name="cliente[]" class="form-control form-control-sm" list="listaClientes" autocomplete="off">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small mb-1">Emissor</label>
+                                    <input type="text" name="emissor[]" class="form-control form-control-sm input-emissor-multi" list="listaEmissores" autocomplete="off" required>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small mb-1">CPF / CNPJ</label>
+                                    <input type="text" name="cnpj_cpf[]" class="form-control form-control-sm input-cpf-multi" autocomplete="off">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small mb-1">Banco</label>
+                                    <input type="text" name="banco[]" class="form-control form-control-sm" list="listaBancos" autocomplete="off">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small mb-1">Nº do Cheque</label>
+                                    <input type="text" name="numero_cheque[]" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small mb-1">Vencimento</label>
+                                    <input type="date" name="data_bom_para[]" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small mb-1">Valor (R$)</label>
+                                    <input type="number" step="0.01" name="valor[]" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small mb-1">Destino</label>
+                                    <input type="text" name="destino[]" class="form-control form-control-sm" list="listaDestinos" autocomplete="off">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small mb-1">Data Repasse</label>
+                                    <input type="date" name="data_repasse[]" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small mb-1 text-primary">Info. Repasse</label>
+                                    <textarea name="info_repasse[]" class="form-control form-control-sm border-primary" rows="2"></textarea>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-bold small mb-1">Observações</label>
+                                    <input type="text" name="observacoes[]" class="form-control form-control-sm">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                containerCheques.insertAdjacentHTML('beforeend', cardHTML);
+            }
+        }
+
+        renderizarFormsCheques(1);
+
+        if (selectQtd) {
+            selectQtd.addEventListener('change', (e) => {
+                renderizarFormsCheques(parseInt(e.target.value));
+            });
+        }
+
+        const modalNovoChequeEl = document.getElementById('modalNovoCheque');
+        if (modalNovoChequeEl) {
+            modalNovoChequeEl.addEventListener('show.bs.modal', function () {
+                if (selectQtd) selectQtd.value = "1";
+                renderizarFormsCheques(1);
+            });
+        }
+
+        if (containerCheques) {
+            containerCheques.addEventListener('input', function(e) {
+                if (e.target.classList.contains('input-emissor-multi')) {
+                    const valorDigitado = e.target.value.trim();
+                    if (emissorMap.hasOwnProperty(valorDigitado)) {
+                        const card = e.target.closest('.card-body');
+                        const cpfInput = card ? card.querySelector('.input-cpf-multi') : null;
+                        if (cpfInput) cpfInput.value = emissorMap[valorDigitado];
+                    }
+                }
+            });
+        }
+    });
+    </script>
+
+    <!-- Script de Recolhimento da Sidebar -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const btnToggle = document.getElementById('btnToggleSidebar');
+            const barraLateral = document.getElementById('barraLateral');
+            
+            if (barraLateral) {
+                barraLateral.classList.add('sidebar-recolhida');
+                if (btnToggle) {
+                    btnToggle.addEventListener('click', function() {
+                        barraLateral.classList.toggle('sidebar-recolhida');
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

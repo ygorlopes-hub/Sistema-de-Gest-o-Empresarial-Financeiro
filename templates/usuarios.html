@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerenciamento de Usuários - BL Embalagens</title>
+    <!-- Frameworks CSS (Bootstrap 5 & Icons) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        /* Estilos Globais e Layout */
+        body { background-color: #f4f5f7; color: #333; }
+        .card { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+
+        /* Comportamento da Barra Lateral Recolhível */
+        #barraLateral { transition: all 0.3s ease; }
+        #barraLateral.sidebar-recolhida {
+            flex: 0 0 70px !important;
+            max-width: 70px !important;
+            width: 70px !important;
+            padding-left: 5px !important;
+            padding-right: 5px !important;
+        }
+        #barraLateral.sidebar-recolhida h5 { display: none !important; }
+        #barraLateral.sidebar-recolhida .list-group-item {
+            font-size: 0 !important;
+            text-align: center !important;
+            padding: 12px 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+        #barraLateral.sidebar-recolhida .list-group-item i {
+            font-size: 1.4rem !important;
+            margin: 0 !important;
+            display: inline-block !important;
+        }
+        /* Expande a área principal de conteúdo para preencher a largura livre */
+        #barraLateral.sidebar-recolhida + * {
+            flex: 1 1 auto !important;
+            max-width: calc(100% - 70px) !important;
+            width: calc(100% - 70px) !important;
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            
+            <!-- ================= SIDEBAR (MENU LATERAL) ================= -->
+            <nav class="col-md-2 sidebar py-4" id="barraLateral">
+                <h5 class="fw-bold px-3 mb-4"><i class="bi bi-box-seam"></i> BL EMBALAGENS</h5>
+                <div class="list-group list-group-flush">
+                    <a href="/" class="list-group-item list-group-item-action border-0 mx-2 mb-1">
+                        <i class="bi bi-grid-1x2"></i> Estoque
+                    </a>
+                    <a href="/relatorios" class="list-group-item list-group-item-action border-0 mx-2 mb-1">
+                        <i class="bi bi-file-earmark-bar-graph"></i> Relatórios
+                    </a>
+                    <a href="/financeiro" class="list-group-item list-group-item-action border-0 mx-2 mb-1">
+                        <i class="bi bi-currency-dollar"></i> Financeiro
+                    </a>
+                    <a href="/cheques" class="list-group-item list-group-item-action border-0 mx-2 mb-1">
+                        <i class="bi bi-card-checklist"></i> Cheques
+                    </a>
+                    <a href="/monitoramento" class="list-group-item list-group-item-action border-0 mx-2 mb-1">
+                        <i class="bi bi-shield-check"></i> Monitoramento
+                    </a>
+                    {% if session.get('usuario_nivel') == 'admin' %}
+                    <a href="/usuarios" class="list-group-item list-group-item-action bg-dark text-white rounded mx-2 mb-1">
+                        <i class="bi bi-people-fill"></i> Usuários
+                    </a>
+                    {% endif %}
+                    <a href="#" class="list-group-item list-group-item-action border-0 mx-2 mb-1" data-bs-toggle="modal" data-bs-target="#modalAlterarSenha">
+                        <i class="bi bi-key"></i> Alterar Senha
+                    </a>
+                    <a href="/logout" class="list-group-item list-group-item-action text-danger border-0 mx-2 mt-5">
+                        <i class="bi bi-box-arrow-left"></i> Sair do Sistema
+                    </a>
+                </div>
+            </nav>
+
+            <!-- ================= CONTEÚDO PRINCIPAL ================= -->
+            <main class="col-md-10 py-4 px-4">
+                
+                <!-- Cabeçalho da Página com Botão Hambúrguer -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="d-flex align-items-center">
+                        <button id="btnToggleSidebar" class="btn btn-outline-secondary me-3" type="button" title="Recolher/Expandir Menu">
+                            <i class="bi bi-list fs-5"></i>
+                        </button>
+                        <div>
+                            <h2 class="fw-bold mb-0">Gerenciamento de Usuários</h2>
+                            <p class="text-muted mb-0">Controle quem tem acesso ao sistema e quais permissões possuem.</p>
+                        </div>
+                    </div>
+                    <button class="btn btn-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalNovoUsuario">
+                        <i class="bi bi-plus-lg"></i> Novo Usuário
+                    </button>
+                </div>
+
+                <!-- Tabela de Usuários -->
+                <div class="card shadow-sm border-0">
+                    <div class="card-body p-0 table-responsive">
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="table-light text-muted small">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>NOME</th>
+                                    <th>LOGIN (USUÁRIO)</th>
+                                    <th>SENHA</th>
+                                    <th>NÍVEL DE ACESSO</th>
+                                    <th class="text-end pe-4">AÇÕES</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for u in usuarios %}
+                                <tr>
+                                    <td>{{ u.id }}</td>
+                                    <td class="fw-bold text-dark">{{ u.nome }}</td>
+                                    <td><code>{{ u.usuario }}</code></td>
+                                    <td><code>{{ u.senha }}</code></td>
+                                    <td>
+                                        {% if u.nivel == 'admin' %}
+                                            <span class="badge bg-danger">Administrador</span>
+                                        {% else %}
+                                            <span class="badge bg-primary">Comum</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end pe-3">
+                                        {% if u.id != session.get('usuario_id') %}
+                                        <form action="/deletar_usuario/{{ u.id }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir este usuário?');">
+                                            <button type="submit" class="btn btn-sm btn-dark" title="Excluir Usuário">
+                                                <i class="bi bi-trash-fill"></i>
+                                            </button>
+                                        </form>
+                                        {% else %}
+                                        <span class="text-muted small">Conta Atual</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- ================= MODAIS DO SISTEMA ================= -->
+    <!-- Modal Novo Usuário -->
+    <div class="modal fade" id="modalNovoUsuario" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-person-plus-fill"></i> Cadastrar Novo Usuário</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/adicionar_usuario" method="POST">
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Nome Completo</label>
+                            <input type="text" name="nome" class="form-control bg-light" required placeholder="Ex: Maria da Silva">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Nome de Usuário (Login)</label>
+                            <input type="text" name="usuario" class="form-control bg-light" required placeholder="Ex: maria" autocomplete="off">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Senha</label>
+                            <input type="password" name="senha" class="form-control bg-light" required placeholder="******">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Nível de Permissão</label>
+                            <select name="nivel" class="form-select bg-light" required>
+                                <option value="comum">Comum (Operacional)</option>
+                                <option value="admin">Administrador (Controle Total)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-dark fw-bold">Salvar Usuário</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Alterar Senha -->
+    <div class="modal fade" id="modalAlterarSenha" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-key-fill"></i> Alterar Minha Senha</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/alterar_senha" method="POST">
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Senha Atual</label>
+                            <input type="password" name="senha_atual" class="form-control bg-light" required placeholder="Digite sua senha atual">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Nova Senha</label>
+                            <input type="password" name="nova_senha" class="form-control bg-light" required placeholder="Digite a nova senha">
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-dark fw-bold">Salvar Nova Senha</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= SCRIPTS JS ================= -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Script de Recolhimento da Sidebar -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const btnToggle = document.getElementById('btnToggleSidebar');
+            const barraLateral = document.getElementById('barraLateral');
+            
+            if (barraLateral) {
+                barraLateral.classList.add('sidebar-recolhida');
+                if (btnToggle) {
+                    btnToggle.addEventListener('click', function() {
+                        barraLateral.classList.toggle('sidebar-recolhida');
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

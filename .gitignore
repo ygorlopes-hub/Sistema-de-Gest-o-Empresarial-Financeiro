@@ -1,0 +1,18 @@
+# Ambiente virtual
+venv/
+.venv/
+env/
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Arquivos de planilhas locais de teste
+*.xlsx
+*.xls
+
+# Configurações de editores de código
+.vscode/
+.idea/
+.env/
