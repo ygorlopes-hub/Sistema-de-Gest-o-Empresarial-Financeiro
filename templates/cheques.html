@@ -128,7 +128,7 @@
                         </div>
                     </div>
                     <div>
-                        <a href="/exportar_excel_cheques?pesquisa={{ filtros.pesquisa }}&banco={{ filtros.banco }}&status={{ filtros.status }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&filtro_emissor={{ filtros.filtro_emissor }}&filtro_numero_cheque={{ filtros.filtro_numero_cheque }}&filtro_destino={{ filtros.filtro_destino }}&filtro_rec_inicio={{ filtros.filtro_rec_inicio }}&filtro_rec_fim={{ filtros.filtro_rec_fim }}&filtro_venc_inicio={{ filtros.filtro_venc_inicio }}&filtro_venc_fim={{ filtros.filtro_venc_fim }}&filtro_valor_min={{ filtros.filtro_valor_min }}&filtro_valor_max={{ filtros.filtro_valor_max }}" class="btn btn-outline-primary fw-bold me-2">
+                        <a href="/exportar_excel_cheques?pesquisa={{ filtros.pesquisa }}&banco={{ filtros.banco }}&status={{ filtros.status }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&filtro_emissor={{ filtros.filtro_emissor }}&filtro_numero_cheque={{ filtros.filtro_numero_cheque }}&filtro_destino={{ filtros.filtro_destino }}&filtro_rep_inicio={{ filtros.filtro_rep_inicio }}&filtro_rep_fim={{ filtros.filtro_rep_fim }}&filtro_rec_inicio={{ filtros.filtro_rec_inicio }}&filtro_rec_fim={{ filtros.filtro_rec_fim }}&filtro_venc_inicio={{ filtros.filtro_venc_inicio }}&filtro_venc_fim={{ filtros.filtro_venc_fim }}&filtro_valor_min={{ filtros.filtro_valor_min }}&filtro_valor_max={{ filtros.filtro_valor_max }}&ordem={{ filtros.ordem }}" class="btn btn-outline-primary fw-bold me-2">
                             <i class="bi bi-download"></i> Exportar Filtrados
                         </a>
                         <button class="btn btn-outline-success fw-bold me-2" data-bs-toggle="modal" data-bs-target="#modalImportarCheques">
@@ -182,6 +182,7 @@
 
                 <!-- Formulário de Filtros Principais -->
                 <form action="/cheques" method="GET" id="formFiltros" class="card mb-4 shadow-sm border-0">
+                    <input type="hidden" name="ordem" value="{{ filtros.ordem }}">
                     <div class="card-body p-3">
                         <div class="row g-2 mb-3 justify-content-center">
                             <div class="col-md-5">
@@ -212,12 +213,24 @@
                     <span class="text-muted fw-bold">Total Encontrado: <span id="contador-total" class="badge bg-primary fs-6">{{ total_registros }}</span></span>
                 </div>
 
+                <!-- Formulário Oculto de Exclusão em Lote -->
+                <form action="/deletar_cheques_lote" method="POST" id="formDeletarLote" onsubmit="return confirm('Tem certeza de que deseja excluir os cheques selecionados?');"></form>
+
                 <!-- Tabela de Dados dos Cheques -->
                 <div class="card mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2 px-2">
+                        <button type="submit" form="formDeletarLote" id="btnExcluirLote" class="btn btn-sm btn-danger fw-bold" style="display: none;">
+                            <i class="bi bi-trash-fill"></i> Eliminar Selecionados (<span id="contadorSelecionados">0</span>)
+                        </button>
+                    </div>
                     <div class="card-body p-0 table-responsive">
                         <table class="table table-hover mb-0 align-middle" id="tabelaCheques">
                             <thead class="table-light text-muted small">
+                                <!-- Linha 1: Títulos das Colunas -->
                                 <tr>
+                                    <th style="width: 35px;" class="text-center">
+                                        <input type="checkbox" id="checkTodos" class="form-check-input">
+                                    </th>
                                     <th>BANCO</th>
                                     <th>Nº CHEQUE</th>
                                     <th>CLIENTE / EMISSOR</th>
@@ -226,13 +239,12 @@
                                         <span class="d-inline-flex align-items-center gap-1">
                                             VENCIMENTO
                                             <a href="/cheques?page=1&pesquisa={{ filtros.pesquisa }}&banco={{ filtros.banco }}&status={{ filtros.status }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&filtro_emissor={{ filtros.filtro_emissor }}&filtro_numero_cheque={{ filtros.filtro_numero_cheque }}&filtro_destino={{ filtros.filtro_destino }}&filtro_rep_inicio={{ filtros.filtro_rep_inicio }}&filtro_rep_fim={{ filtros.filtro_rep_fim }}&filtro_rec_inicio={{ filtros.filtro_rec_inicio }}&filtro_rec_fim={{ filtros.filtro_rec_fim }}&filtro_venc_inicio={{ filtros.filtro_venc_inicio }}&filtro_venc_fim={{ filtros.filtro_venc_fim }}&filtro_valor_min={{ filtros.filtro_valor_min }}&filtro_valor_max={{ filtros.filtro_valor_max }}&ordem={% if filtros.ordem == 'venc_asc' %}venc_desc{% else %}venc_asc{% endif %}" 
-                                            class="btn btn-sm btn-light border py-0 px-1 text-dark" 
-                                            title="Ordenar por Vencimento (Próximos)">
+                                               class="btn btn-sm btn-light border py-0 px-1 text-dark" 
+                                               title="Ordenar por Vencimento">
                                                 <i class="bi bi-arrow-down-up"></i>
                                             </a>
                                         </span>
                                     </th>
-                                    <input type="hidden" name="ordem" value="{{ filtros.ordem }}">
                                     <th>
                                         VALOR<br>
                                         <span class="text-success small fw-bold">Total: R$ {{ "{:,.2f}".format(resumo.valor_total).replace(',', 'X').replace('.', ',').replace('X', '.') }}</span>
@@ -243,9 +255,10 @@
                                     <th class="text-end pe-4">AÇÕES</th>
                                 </tr>
                                 
-                                <!-- Linha de Filtros de Coluna -->
+                                <!-- Linha 2: Campos de Filtro -->
                                 <tr class="bg-light">
-                                    <th></th>
+                                    <th></th> <!-- Espaço do Checkbox -->
+                                    <th></th> <!-- Espaço do Banco -->
                                     <th>
                                         <input type="text" name="filtro_numero_cheque" form="formFiltros" value="{{ filtros.filtro_numero_cheque }}" class="form-control form-control-sm" placeholder="Nº cheque..." onchange="document.getElementById('formFiltros').submit()">
                                     </th>
@@ -279,19 +292,22 @@
                                             </div>
                                         </div>
                                     </th>
-                                    <th></th> <!-- Espaço em branco para a coluna OBS -->
-                                    <th></th>
-                                    <th></th>
+                                    <th></th> <!-- Espaço de OBS -->
+                                    <th></th> <!-- Espaço de Status -->
+                                    <th></th> <!-- Espaço de Ações -->
                                 </tr>
                             </thead>
                             <tbody>
                                 {% if not cheques %}
                                 <tr>
-                                    <td colspan="9" class="text-center py-4 text-muted">Nenhum cheque encontrado com os filtros atuais.</td>
+                                    <td colspan="11" class="text-center py-4 text-muted">Nenhum cheque encontrado com os filtros atuais.</td>
                                 </tr>
                                 {% endif %}
                                 {% for ch in cheques %}
                                 <tr>
+                                    <td class="text-center">
+                                        <input type="checkbox" name="cheques_selecionados[]" value="{{ ch.id }}" form="formDeletarLote" class="form-check-input check-cheque">
+                                    </td>
                                     <td class="fw-bold">{{ ch.banco }}</td>
                                     <td class="fw-bold">{{ ch.numero_cheque }}</td>
                                     <td>
@@ -364,13 +380,13 @@
                 <nav aria-label="Navegação de páginas">
                     <ul class="pagination justify-content-center">
                         <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-                            <a class="page-link" href="/cheques?page={{ page - 1 }}&pesquisa={{ filtros.pesquisa }}&banco={{ filtros.banco }}&status={{ filtros.status }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&filtro_emissor={{ filtros.filtro_emissor }}&filtro_numero_cheque={{ filtros.filtro_numero_cheque }}&filtro_destino={{ filtros.filtro_destino }}&filtro_rec_inicio={{ filtros.filtro_rec_inicio }}&filtro_rec_fim={{ filtros.filtro_rec_fim }}&filtro_venc_inicio={{ filtros.filtro_venc_inicio }}&filtro_venc_fim={{ filtros.filtro_venc_fim }}&filtro_valor_min={{ filtros.filtro_valor_min }}&filtro_valor_max={{ filtros.filtro_valor_max }}&ordem={{ filtros.ordem }}">Anterior</a>
+                            <a class="page-link" href="/cheques?page={{ page - 1 }}&pesquisa={{ filtros.pesquisa }}&banco={{ filtros.banco }}&status={{ filtros.status }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&filtro_emissor={{ filtros.filtro_emissor }}&filtro_numero_cheque={{ filtros.filtro_numero_cheque }}&filtro_destino={{ filtros.filtro_destino }}&filtro_rep_inicio={{ filtros.filtro_rep_inicio }}&filtro_rep_fim={{ filtros.filtro_rep_fim }}&filtro_rec_inicio={{ filtros.filtro_rec_inicio }}&filtro_rec_fim={{ filtros.filtro_rec_fim }}&filtro_venc_inicio={{ filtros.filtro_venc_inicio }}&filtro_venc_fim={{ filtros.filtro_venc_fim }}&filtro_valor_min={{ filtros.filtro_valor_min }}&filtro_valor_max={{ filtros.filtro_valor_max }}&ordem={{ filtros.ordem }}">Anterior</a>
                         </li>
                         <li class="page-item disabled">
                             <span class="page-link text-dark fw-bold bg-light">Página {{ page }} de {{ total_pages }}</span>
                         </li>
                         <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-                            <a class="page-link" href="/cheques?page={{ page + 1 }}&pesquisa={{ filtros.pesquisa }}&banco={{ filtros.banco }}&status={{ filtros.status }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&filtro_emissor={{ filtros.filtro_emissor }}&filtro_numero_cheque={{ filtros.filtro_numero_cheque }}&filtro_destino={{ filtros.filtro_destino }}&filtro_rec_inicio={{ filtros.filtro_rec_inicio }}&filtro_rec_fim={{ filtros.filtro_rec_fim }}&filtro_venc_inicio={{ filtros.filtro_venc_inicio }}&filtro_venc_fim={{ filtros.filtro_venc_fim }}&filtro_valor_min={{ filtros.filtro_valor_min }}&filtro_valor_max={{ filtros.filtro_valor_max }}&ordem={{ filtros.ordem }}">Próxima</a>
+                            <a class="page-link" href="/cheques?page={{ page + 1 }}&pesquisa={{ filtros.pesquisa }}&banco={{ filtros.banco }}&status={{ filtros.status }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&filtro_emissor={{ filtros.filtro_emissor }}&filtro_numero_cheque={{ filtros.filtro_numero_cheque }}&filtro_destino={{ filtros.filtro_destino }}&filtro_rep_inicio={{ filtros.filtro_rep_inicio }}&filtro_rep_fim={{ filtros.filtro_rep_fim }}&filtro_rec_inicio={{ filtros.filtro_rec_inicio }}&filtro_rec_fim={{ filtros.filtro_rec_fim }}&filtro_venc_inicio={{ filtros.filtro_venc_inicio }}&filtro_venc_fim={{ filtros.filtro_venc_fim }}&filtro_valor_min={{ filtros.filtro_valor_min }}&filtro_valor_max={{ filtros.filtro_valor_max }}&ordem={{ filtros.ordem }}">Próxima</a>
                         </li>
                     </ul>
                 </nav>
@@ -816,6 +832,37 @@
                 }
             }
         });
+    </script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const checkTodos = document.getElementById('checkTodos');
+        const checksCheque = document.querySelectorAll('.check-cheque');
+        const btnExcluirLote = document.getElementById('btnExcluirLote');
+        const contador = document.getElementById('contadorSelecionados');
+
+        function atualizarEstadoBotao() {
+            const selecionados = document.querySelectorAll('.check-cheque:checked').length;
+            if (contador) contador.textContent = selecionados;
+            if (btnExcluirLote) {
+                btnExcluirLote.style.display = selecionados > 0 ? 'inline-block' : 'none';
+            }
+        }
+
+        if (checkTodos) {
+            checkTodos.addEventListener('change', (e) => {
+                checksCheque.forEach(chk => chk.checked = e.target.checked);
+                atualizarEstadoBotao();
+            });
+        }
+
+        checksCheque.forEach(chk => {
+            chk.addEventListener('change', () => {
+                if (!chk.checked && checkTodos) checkTodos.checked = false;
+                atualizarEstadoBotao();
+            });
+        });
+    });
     </script>
 </body>
 </html>

@@ -893,7 +893,28 @@ def deletar_cheque(id_cheque):
     conexao.close()
     
     socketio.emit('atualizar_tela')
-    return redirect(url_for('cheques'))
+    
+    # Redireciona mantendo os parâmetros de filtro da página anterior
+    return redirect(request.referrer or url_for('cheques'))
+
+@app.route('/deletar_cheques_lote', methods=['POST'])
+@login_required
+@admin_required
+def deletar_cheques_lote():
+    ids_selecionados = request.form.getlist('cheques_selecionados[]')
+    
+    if ids_selecionados:
+        conexao = get_conexao()
+        with conexao.cursor() as cursor:
+            placeholders = ', '.join(['%s'] * len(ids_selecionados))
+            sql = f"DELETE FROM tb_cheques WHERE id IN ({placeholders})"
+            cursor.execute(sql, tuple(ids_selecionados))
+            conexao.commit()
+            registrar_log("EXCLUIU CHEQUES EM LOTE", f"Apagou {len(ids_selecionados)} cheque(s).")
+        conexao.close()
+        socketio.emit('atualizar_tela')
+        
+    return redirect(request.referrer or url_for('cheques'))
 
 @app.route('/editar_cheque/<int:id_cheque>', methods=['POST'])
 @login_required
