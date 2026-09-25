@@ -218,9 +218,13 @@
 
                 <!-- Tabela de Dados dos Cheques -->
                 <div class="card mb-3">
-                    <div class="d-flex justify-content-between align-items-center mb-2 px-2">
-                        <button type="submit" form="formDeletarLote" id="btnExcluirLote" class="btn btn-sm btn-danger fw-bold" style="display: none;">
-                            <i class="bi bi-trash-fill"></i> Eliminar Selecionados (<span id="contadorSelecionados">0</span>)
+                    <!-- Barra de Ações em Lote (Botões de Excluir e Editar Selecionados) -->
+                    <div class="d-flex align-items-center mb-2 px-2 gap-2" id="barraAcoesLote" style="display: none;">
+                        <button type="submit" form="formDeletarLote" class="btn btn-sm btn-danger fw-bold">
+                            <i class="bi bi-trash-fill"></i> Eliminar Selecionados (<span class="contadorSelecionados">0</span>)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-primary fw-bold" onclick="abrirModalEditarLote()">
+                            <i class="bi bi-pencil-square"></i> Editar Selecionados (<span class="contadorSelecionados">0</span>)
                         </button>
                     </div>
                     <div class="card-body p-0 table-responsive">
@@ -304,7 +308,21 @@
                                 </tr>
                                 {% endif %}
                                 {% for ch in cheques %}
-                                <tr>
+                                <tr id="linha-cheque-{{ ch.id }}" 
+                                    data-id="{{ ch.id }}"
+                                    data-banco="{{ ch.banco or '' }}"
+                                    data-numero="{{ ch.numero_cheque or '' }}"
+                                    data-cliente="{{ ch.cliente or '' }}"
+                                    data-emissor="{{ ch.emissor or '' }}"
+                                    data-cnpj="{{ ch.cnpj_cpf or '' }}"
+                                    data-datarec="{{ ch.data_recebimento.strftime('%Y-%m-%d') if ch.data_recebimento else '' }}"
+                                    data-datavenc="{{ ch.data_bom_para.strftime('%Y-%m-%d') if ch.data_bom_para else '' }}"
+                                    data-valor="{{ ch.valor or '' }}"
+                                    data-destino="{{ ch.destino or '' }}"
+                                    data-datarep="{{ ch.data_repasse.strftime('%Y-%m-%d') if ch.data_repasse else '' }}"
+                                    data-inforep="{{ ch.info_repasse if ch.info_repasse and ch.info_repasse != 'nan' else '' }}"
+                                    data-obs="{{ ch.observacoes if ch.observacoes and ch.observacoes != 'nan' else '' }}">
+                                    
                                     <td class="text-center">
                                         <input type="checkbox" name="cheques_selecionados[]" value="{{ ch.id }}" form="formDeletarLote" class="form-check-input check-cheque">
                                     </td>
@@ -577,6 +595,33 @@
         </div>
     </div>
 
+    <!-- Modal Edição Múltipla Lado a Lado -->
+    <div class="modal fade" id="modalEditarLote" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content bg-light">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square"></i> Editar Cheques Selecionados</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <!-- Vamos enviar para a mesma rota de adicionar, pois o backend atualiza se o cheque existir -->
+                <form action="/adicionar_cheque" method="POST" id="formEditarLote" onsubmit="this.querySelector('button[type=submit]').disabled = true; this.querySelector('button[type=submit]').innerHTML = '<span class=\'spinner-border spinner-border-sm\' role=\'status\' aria-hidden=\'true\'></span> Salvando...';">
+                    <div class="modal-body p-3">
+                        <p class="text-muted small mb-2 ps-2"><i class="bi bi-info-circle"></i> Altere os campos desejados e clique em salvar. Os cheques selecionados serão atualizados no sistema.</p>
+                        
+                        <!-- Container Flexbox Horizontal de Cheques Editáveis -->
+                        <div class="d-flex flex-nowrap overflow-auto pb-3 gap-3 px-2" id="container-cheques-editar">
+                            <!-- Injetado dinamicamente via JavaScript -->
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-white border-top">
+                        <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary fw-bold">Salvar Alterações</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Alterar Senha -->
     <div class="modal fade" id="modalAlterarSenha" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
@@ -638,7 +683,7 @@
                     </div>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form action="/adicionar_cheque" method="POST">
+                <form action="/adicionar_cheque" method="POST" onsubmit="this.querySelector('button[type=submit]').disabled = true; this.querySelector('button[type=submit]').innerHTML = '<span class=\'spinner-border spinner-border-sm\' role=\'status\' aria-hidden=\'true\'></span> Salvando...';">
                     <div class="modal-body p-3">
                         <!-- Listas de Sugestões (Invisíveis) -->
                         <datalist id="listaClientes">{% for cli in clientes %}<option value="{{ cli }}">{% endfor %}</datalist>
@@ -845,17 +890,18 @@
     </script>
 
     <script>
+    // --- 2. Gerenciamento do Checkbox e Ações em Lote ---
     document.addEventListener('DOMContentLoaded', () => {
         const checkTodos = document.getElementById('checkTodos');
         const checksCheque = document.querySelectorAll('.check-cheque');
-        const btnExcluirLote = document.getElementById('btnExcluirLote');
-        const contador = document.getElementById('contadorSelecionados');
+        const barraAcoesLote = document.getElementById('barraAcoesLote');
+        const contadores = document.querySelectorAll('.contadorSelecionados');
 
         function atualizarEstadoBotao() {
             const selecionados = document.querySelectorAll('.check-cheque:checked').length;
-            if (contador) contador.textContent = selecionados;
-            if (btnExcluirLote) {
-                btnExcluirLote.style.display = selecionados > 0 ? 'inline-block' : 'none';
+            contadores.forEach(c => c.textContent = selecionados);
+            if (barraAcoesLote) {
+                barraAcoesLote.style.display = selecionados > 0 ? 'flex' : 'none';
             }
         }
 
@@ -873,6 +919,124 @@
             });
         });
     });
+
+    // Função que abre o modal de edição em lote preenchendo os cards lado a lado
+    function abrirModalEditarLote() {
+        const selecionados = document.querySelectorAll('.check-cheque:checked');
+        const container = document.getElementById('container-cheques-editar');
+        container.innerHTML = ''; // Limpa os antigos
+        
+        let contador = 1;
+        
+        selecionados.forEach(chk => {
+            // Pega a linha (tr) correspondente ao checkbox clicado
+            const tr = document.getElementById(`linha-cheque-${chk.value}`);
+            
+            // Extrai os dados salvos nos atributos data-* da linha
+            const data = {
+                id: tr.getAttribute('data-id'),
+                banco: tr.getAttribute('data-banco'),
+                numero: tr.getAttribute('data-numero'),
+                cliente: tr.getAttribute('data-cliente'),
+                emissor: tr.getAttribute('data-emissor'),
+                cnpj: tr.getAttribute('data-cnpj'),
+                dataRec: tr.getAttribute('data-datarec'),
+                dataVenc: tr.getAttribute('data-datavenc'),
+                valor: tr.getAttribute('data-valor'),
+                destino: tr.getAttribute('data-destino'),
+                dataRep: tr.getAttribute('data-datarep'),
+                infoRep: tr.getAttribute('data-inforep'),
+                obs: tr.getAttribute('data-obs')
+            };
+            
+            const card = document.createElement('div');
+            card.className = 'card shadow-sm border-primary';
+            card.style.minWidth = '320px';
+            card.style.flex = '0 0 auto';
+            
+            // Reconstrói o formulário de edição usando o layout de grid semelhante ao modal individual
+            card.innerHTML = `
+                <div class="card-header bg-primary text-white fw-bold py-2 d-flex justify-content-between">
+                    <span><i class="bi bi-pencil-square"></i> Editando Cheque ${contador}</span>
+                    <span class="badge bg-light text-primary">Nº ${data.numero}</span>
+                </div>
+                <div class="card-body p-3 bg-white">
+                    <input type="hidden" name="id_cheque[]" value="${data.id}">
+                    
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1 text-muted">Data Recebimento</label>
+                            <input type="date" name="data_recebimento[]" class="form-control form-control-sm bg-light" value="${data.dataRec}">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Cliente</label>
+                            <input type="text" name="cliente[]" class="form-control form-control-sm border-primary" list="listaClientes" autocomplete="off" value="${data.cliente}">
+                        </div>
+                    </div>
+                    
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1 text-muted">Emissor</label>
+                            <input type="text" name="emissor[]" class="form-control form-control-sm bg-light" list="listaEmissores" autocomplete="off" value="${data.emissor}">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1 text-muted">CNPJ / CPF</label>
+                            <input type="text" name="cnpj_cpf[]" class="form-control form-control-sm bg-light" list="listaCnpjs" autocomplete="off" value="${data.cnpj}">
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Banco</label>
+                            <input type="text" name="banco[]" class="form-control form-control-sm border-primary" list="listaBancos" autocomplete="off" value="${data.banco}">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Nº Cheque</label>
+                            <input type="text" name="numero_cheque[]" class="form-control form-control-sm border-primary" value="${data.numero}" required readonly title="O número do cheque não pode ser alterado em lote.">
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Venc. (Bom Para)</label>
+                            <input type="date" name="data_bom_para[]" class="form-control form-control-sm border-primary" value="${data.dataVenc}" required readonly title="O vencimento não pode ser alterado em lote.">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Valor (R$)</label>
+                            <input type="number" step="0.01" name="valor[]" class="form-control form-control-sm border-primary" value="${data.valor}" required readonly title="O valor não pode ser alterado em lote.">
+                        </div>
+                    </div>
+                    
+                    <hr class="text-muted my-2">
+                    
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1 text-muted">Destino</label>
+                            <input type="text" name="destino[]" class="form-control form-control-sm bg-light" list="listaDestinos" autocomplete="off" value="${data.destino}">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1 text-muted">Data Repasse</label>
+                            <input type="date" name="data_repasse[]" class="form-control form-control-sm bg-light" value="${data.dataRep}">
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold mb-1 text-primary">Info. do Repasse</label>
+                        <textarea name="info_repasse[]" class="form-control form-control-sm border-primary bg-light" rows="1">${data.infoRep}</textarea>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label small fw-bold mb-1 text-muted">Observações</label>
+                        <input type="text" name="observacoes[]" class="form-control form-control-sm bg-light" value="${data.obs}">
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+            contador++;
+        });
+        
+        // Abre o Modal
+        new bootstrap.Modal(document.getElementById('modalEditarLote')).show();
+    }
     </script>
 </body>
 </html>

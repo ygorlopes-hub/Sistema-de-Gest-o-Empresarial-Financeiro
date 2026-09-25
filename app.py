@@ -610,34 +610,58 @@ def adicionar_cheque():
 
     conexao = get_conexao()
     with conexao.cursor() as cursor:
-        sql = """
-            INSERT INTO tb_cheques 
-            (data_recebimento, cliente, emissor, cnpj_cpf, banco, numero_cheque, data_bom_para, valor, destino, data_repasse, observacoes, info_repasse) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """
         cheques_cadastrados = 0
+        cheques_atualizados = 0
+        
         for i in range(len(numeros)):
             if not numeros[i].strip():
                 continue 
                 
-            cursor.execute(sql, (
-                datas_rec[i] if datas_rec[i] else None,
-                clientes[i],
-                emissores[i],
-                cnpjs_cpfs[i],
-                bancos[i],
-                numeros[i],
-                datas_bom_para[i] if datas_bom_para[i] else None,
-                valores[i] if valores[i] else 0,
-                destinos[i],
-                datas_repasse[i] if datas_repasse[i] else None,
-                observacoes[i],
-                infos_repasse[i]
-            ))
-            cheques_cadastrados += 1
+            # Tratamento limpo das variáveis
+            data_rec = datas_rec[i] if datas_rec[i] else None
+            cliente = clientes[i]
+            emissor = emissores[i]
+            cnpj_cpf = cnpjs_cpfs[i]
+            banco = bancos[i]
+            numero = numeros[i]
+            data_venc = datas_bom_para[i] if datas_bom_para[i] else None
+            valor = float(valores[i]) if valores[i] else 0
+            destino = destinos[i]
+            data_rep = datas_repasse[i] if datas_repasse[i] else None
+            obs = observacoes[i]
+            info_rep = infos_repasse[i]
+
+            # 1. VERIFICA SE O CHEQUE JÁ EXISTE NO BANCO DE DADOS
+            sql_verifica = """
+                SELECT id FROM tb_cheques 
+                WHERE banco = %s AND numero_cheque = %s AND emissor = %s AND data_bom_para = %s AND valor = %s
+            """
+            cursor.execute(sql_verifica, (banco, numero, emissor, data_venc, valor))
+            cheque_existente = cursor.fetchone()
+            
+            if not cheque_existente:
+                # Se NÃO existe, insere um novo
+                sql_insere = """
+                    INSERT INTO tb_cheques 
+                    (data_recebimento, cliente, emissor, cnpj_cpf, banco, numero_cheque, data_bom_para, valor, destino, data_repasse, observacoes, info_repasse) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(sql_insere, (data_rec, cliente, emissor, cnpj_cpf, banco, numero, data_venc, valor, destino, data_rep, obs, info_rep))
+                cheques_cadastrados += 1
+            else:
+                # Se JÁ existe, apenas atualiza as informações extras (evita duplicação)
+                id_cheque = cheque_existente['id']
+                sql_atualiza = """
+                    UPDATE tb_cheques 
+                    SET data_recebimento = %s, cliente = %s, cnpj_cpf = %s, destino = %s, 
+                        data_repasse = %s, observacoes = %s, info_repasse = %s
+                    WHERE id = %s
+                """
+                cursor.execute(sql_atualiza, (data_rec, cliente, cnpj_cpf, destino, data_rep, obs, info_rep, id_cheque))
+                cheques_atualizados += 1
             
         conexao.commit()
-        registrar_log("CADASTROU CHEQUES", f"Cadastrou {cheques_cadastrados} cheque(s) em lote.")
+        registrar_log("CADASTROU CHEQUES", f"Cadastrou {cheques_cadastrados} e atualizou {cheques_atualizados} cheque(s) via lote manual.")
     conexao.close()
     
     socketio.emit('atualizar_tela')
@@ -1029,6 +1053,56 @@ def alterar_senha():
             
     conexao.close()
     return redirect(request.referrer or url_for('dashboard'))
+
+@app.route('/editar_cheques_lote', methods=['POST'])
+@login_required
+def editar_cheques_lote():
+    ids_selecionados = request.form.getlist('cheques_selecionados[]')
+    
+    if not ids_selecionados:
+        return redirect(request.referrer or url_for('cheques'))
+        
+    destino = request.form.get('destino_lote', '').strip()
+    data_repasse = request.form.get('data_repasse_lote', '').strip()
+    status = request.form.get('status_lote', '').strip()
+    info_repasse = request.form.get('info_repasse_lote', '').strip()
+    observacoes = request.form.get('observacoes_lote', '').strip()
+    
+    updates = []
+    params = []
+    
+    # Monta a query dinamicamente (só atualiza o que o usuário preencheu)
+    if destino:
+        updates.append("destino = %s")
+        params.append(destino)
+    if data_repasse:
+        updates.append("data_repasse = %s")
+        params.append(data_repasse)
+    if info_repasse:
+        updates.append("info_repasse = %s")
+        params.append(info_repasse)
+    if observacoes:
+        updates.append("observacoes = %s")
+        params.append(observacoes)
+    if status:
+        updates.append("status_cheque = %s")
+        params.append(status)
+        if status == 'Pendente':
+            updates.append("data_repasse = NULL") # Limpa a data se voltar pra pendente
+            
+    if updates:
+        sql = f"UPDATE tb_cheques SET {', '.join(updates)} WHERE id IN ({', '.join(['%s']*len(ids_selecionados))})"
+        params.extend(ids_selecionados)
+        
+        conexao = get_conexao()
+        with conexao.cursor() as cursor:
+            cursor.execute(sql, tuple(params))
+            conexao.commit()
+            registrar_log("EDITOU CHEQUES EM LOTE", f"Atualizou {len(ids_selecionados)} cheque(s) em lote.")
+        conexao.close()
+        socketio.emit('atualizar_tela')
+        
+    return redirect(request.referrer or url_for('cheques'))
 
 
 # ==========================================
