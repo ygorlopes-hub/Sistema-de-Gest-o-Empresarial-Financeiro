@@ -870,6 +870,7 @@
         }
 
         if (containerCheques) {
+            // Lógica existente do Emissor -> CNPJ (mantida no 'input' para ser em tempo real)
             containerCheques.addEventListener('input', function(e) {
                 if (e.target.classList.contains('input-emissor-multi')) {
                     const valorDigitado = e.target.value.trim();
@@ -877,6 +878,27 @@
                         const card = e.target.closest('.card-body');
                         const cpfInput = card ? card.querySelector('.input-cpf-multi') : null;
                         if (cpfInput) cpfInput.value = emissorMap[valorDigitado];
+                    }
+                }
+            });
+
+            // NOVA LÓGICA: Sincronização automática de Data e Cliente
+            containerCheques.addEventListener('change', function(e) {
+                // Verifica se o campo alterado foi a data de recebimento ou o cliente
+                if (e.target.name === 'data_recebimento[]' || e.target.name === 'cliente[]') {
+                    const valorDigitado = e.target.value;
+                    
+                    // Só copia se o campo não estiver vazio
+                    if (valorDigitado.trim() !== '') {
+                        // Busca todos os inputs com o mesmo nome dentro do modal
+                        const inputs = containerCheques.querySelectorAll(`input[name="${e.target.name}"]`);
+                        
+                        inputs.forEach(input => {
+                            // Se for um cheque diferente e ele estiver VAZIO, recebe o valor automático
+                            if (input !== e.target && input.value === '') {
+                                input.value = valorDigitado;
+                            }
+                        });
                     }
                 }
             });
