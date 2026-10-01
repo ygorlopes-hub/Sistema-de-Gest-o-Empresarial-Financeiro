@@ -488,7 +488,7 @@ def cheques():
 
     conexao = get_conexao()
     with conexao.cursor() as cursor:
-        cursor.execute("UPDATE tb_cheques SET status_cheque = 'Repassado' WHERE data_repasse IS NOT NULL")
+        cursor.execute("UPDATE tb_cheques SET status_cheque = 'Repassado' WHERE data_repasse IS NOT NULL AND (status_cheque = 'Pendente' OR status_cheque IS NULL)")
         conexao.commit()
 
         cursor.execute(f"SELECT COUNT(*) as total {query_base}", tuple(params))

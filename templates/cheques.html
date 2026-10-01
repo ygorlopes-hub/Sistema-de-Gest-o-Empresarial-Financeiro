@@ -775,72 +775,84 @@
         const selectQtd = document.getElementById('select-qtd-cheques');
 
         function renderizarFormsCheques(qtd) {
-            if (!containerCheques) return;
-            containerCheques.innerHTML = '';
-            for (let i = 1; i <= qtd; i++) {
-                const cardHTML = `
-                    <div class="card shadow-sm border-secondary flex-shrink-0" style="width: 320px;">
-                        <div class="card-header bg-secondary text-white fw-bold py-2 d-flex justify-content-between align-items-center">
-                            <span>Cheque #${i}</span>
-                        </div>
-                        <div class="card-body p-3 bg-white">
-                            <div class="row g-2">
-                                <div class="col-12">
-                                    <label class="form-label fw-bold small mb-1">Data Recebimento</label>
-                                    <input type="date" name="data_recebimento[]" class="form-control form-control-sm">
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label fw-bold small mb-1">Cliente</label>
-                                    <input type="text" name="cliente[]" class="form-control form-control-sm" list="listaClientes" autocomplete="off">
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label fw-bold small mb-1">Emissor</label>
-                                    <input type="text" name="emissor[]" class="form-control form-control-sm input-emissor-multi" list="listaEmissores" autocomplete="off" required>
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label fw-bold small mb-1">CPF / CNPJ</label>
-                                    <input type="text" name="cnpj_cpf[]" class="form-control form-control-sm input-cpf-multi" autocomplete="off">
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label fw-bold small mb-1">Banco</label>
-                                    <input type="text" name="banco[]" class="form-control form-control-sm" list="listaBancos" autocomplete="off">
-                                </div>
-                                <div class="col-6">
-                                    <label class="form-label fw-bold small mb-1">Nº do Cheque</label>
-                                    <input type="text" name="numero_cheque[]" class="form-control form-control-sm" required>
-                                </div>
-                                <div class="col-6">
-                                    <label class="form-label fw-bold small mb-1">Vencimento</label>
-                                    <input type="date" name="data_bom_para[]" class="form-control form-control-sm" required>
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label fw-bold small mb-1">Valor (R$)</label>
-                                    <input type="number" step="0.01" name="valor[]" class="form-control form-control-sm" required>
-                                </div>
-                                <div class="col-6">
-                                    <label class="form-label fw-bold small mb-1">Destino</label>
-                                    <input type="text" name="destino[]" class="form-control form-control-sm" list="listaDestinos" autocomplete="off">
-                                </div>
-                                <div class="col-6">
-                                    <label class="form-label fw-bold small mb-1">Data Repasse</label>
-                                    <input type="date" name="data_repasse[]" class="form-control form-control-sm">
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label fw-bold small mb-1 text-primary">Info. Repasse</label>
-                                    <textarea name="info_repasse[]" class="form-control form-control-sm border-primary" rows="2"></textarea>
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label fw-bold small mb-1">Observações</label>
-                                    <input type="text" name="observacoes[]" class="form-control form-control-sm">
+            const atual = containerCheques.children.length;
+            
+            if (qtd > atual) {
+                for (let i = atual + 1; i <= qtd; i++) {
+                    // Criei um container temporário só para manter a sua estrutura de string HTML
+                    const cardWrapper = document.createElement('div');
+                    
+                    const cardHTML = `
+                        <div class="card shadow-sm border-secondary flex-shrink-0" style="width: 320px; flex: 0 0 auto;">
+                            <div class="card-header bg-secondary text-white fw-bold py-2 d-flex justify-content-between align-items-center">
+                                <span>Cheque #${i}</span>
+                            </div>
+                            <div class="card-body p-3 bg-white">
+                                <div class="row g-2">
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold small mb-1">Data Recebimento</label>
+                                        <input type="date" name="data_recebimento[]" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold small mb-1">Cliente</label>
+                                        <input type="text" name="cliente[]" class="form-control form-control-sm" list="listaClientes" autocomplete="off">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold small mb-1">Emissor</label>
+                                        <input type="text" name="emissor[]" class="form-control form-control-sm input-emissor-multi" list="listaEmissores" autocomplete="off" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold small mb-1">CPF / CNPJ</label>
+                                        <input type="text" name="cnpj_cpf[]" class="form-control form-control-sm input-cpf-multi" autocomplete="off">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold small mb-1">Banco</label>
+                                        <input type="text" name="banco[]" class="form-control form-control-sm" list="listaBancos" autocomplete="off">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label fw-bold small mb-1">Nº do Cheque</label>
+                                        <input type="text" name="numero_cheque[]" class="form-control form-control-sm" required>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label fw-bold small mb-1">Vencimento</label>
+                                        <input type="date" name="data_bom_para[]" class="form-control form-control-sm" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold small mb-1">Valor (R$)</label>
+                                        <input type="number" step="0.01" name="valor[]" class="form-control form-control-sm" required>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label fw-bold small mb-1">Destino</label>
+                                        <input type="text" name="destino[]" class="form-control form-control-sm" list="listaDestinos" autocomplete="off">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label fw-bold small mb-1">Data Repasse</label>
+                                        <input type="date" name="data_repasse[]" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold small mb-1 text-primary">Info. Repasse</label>
+                                        <textarea name="info_repasse[]" class="form-control form-control-sm border-primary" rows="2"></textarea>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold small mb-1">Observações</label>
+                                        <input type="text" name="observacoes[]" class="form-control form-control-sm">
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                `;
-                containerCheques.insertAdjacentHTML('beforeend', cardHTML);
+                    `;
+                    containerCheques.insertAdjacentHTML('beforeend', cardHTML);
+                } // <--- Faltava fechar o FOR aqui
+            } 
+            else if (qtd < atual) {
+                // Adicionado a lógica para remover apenas os excedentes sem apagar o que já foi digitado
+                for (let i = atual; i > qtd; i--) {
+                    containerCheques.removeChild(containerCheques.lastElementChild);
+                }
             }
-        }
+        } // <--- Faltava fechar a FUNÇÃO aqui
 
+        // Inicializa com 1
         renderizarFormsCheques(1);
 
         if (selectQtd) {
@@ -853,6 +865,8 @@
         if (modalNovoChequeEl) {
             modalNovoChequeEl.addEventListener('show.bs.modal', function () {
                 if (selectQtd) selectQtd.value = "1";
+                // Limpa tudo antes de abrir novamente
+                containerCheques.innerHTML = '';
                 renderizarFormsCheques(1);
             });
         }
