@@ -779,7 +779,6 @@
             
             if (qtd > atual) {
                 for (let i = atual + 1; i <= qtd; i++) {
-                    // Criei um container temporário só para manter a sua estrutura de string HTML
                     const cardWrapper = document.createElement('div');
                     
                     const cardHTML = `
@@ -842,15 +841,14 @@
                         </div>
                     `;
                     containerCheques.insertAdjacentHTML('beforeend', cardHTML);
-                } // <--- Faltava fechar o FOR aqui
+                }
             } 
             else if (qtd < atual) {
-                // Adicionado a lógica para remover apenas os excedentes sem apagar o que já foi digitado
                 for (let i = atual; i > qtd; i--) {
                     containerCheques.removeChild(containerCheques.lastElementChild);
                 }
             }
-        } // <--- Faltava fechar a FUNÇÃO aqui
+        }
 
         // Inicializa com 1
         renderizarFormsCheques(1);
