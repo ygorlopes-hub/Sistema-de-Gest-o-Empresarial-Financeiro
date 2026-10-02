@@ -1071,6 +1071,30 @@
         // Abre o Modal
         new bootstrap.Modal(document.getElementById('modalEditarLote')).show();
     }
+
+    // NOVA LÓGICA: Sincronização automática de Destino e Data Repasse (Modal Edição)
+        const containerChequesEditar = document.getElementById('container-cheques-editar');
+        if (containerChequesEditar) {
+            containerChequesEditar.addEventListener('change', function(e) {
+                // Verifica se o campo alterado foi o destino ou a data de repasse
+                if (e.target.name === 'destino[]' || e.target.name === 'data_repasse[]') {
+                    const valorDigitado = e.target.value;
+                    
+                    // Só copia se o campo não estiver vazio
+                    if (valorDigitado.trim() !== '') {
+                        // Busca todos os inputs com o mesmo nome dentro do modal de edição
+                        const inputs = containerChequesEditar.querySelectorAll(`input[name="${e.target.name}"]`);
+                        
+                        inputs.forEach(input => {
+                            // Se for um cheque diferente e ele estiver VAZIO, recebe o valor automático
+                            if (input !== e.target && input.value === '') {
+                                input.value = valorDigitado;
+                            }
+                        });
+                    }
+                }
+            });
+        }
     </script>
 </body>
 </html>
