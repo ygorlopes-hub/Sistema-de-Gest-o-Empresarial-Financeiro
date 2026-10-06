@@ -878,7 +878,25 @@ def exportar_excel_cheques():
     df = pd.DataFrame(dados)
     if not df.empty:
         df.columns = ['Banco', 'Nº Cheque', 'Data Recebimento', 'Cliente', 'Emissor', 'CNPJ/CPF', 'Vencimento', 'Valor (R$)', 'Destino', 'Data Repasse', 'Observações Gerais', 'Info Repasse', 'Status']
-    
+        ordem_da_empresa = [
+            'Data Recebimento', 
+            'Cliente',            
+            'Emissor',        
+            'CNPJ/CPF',          
+            'Banco',       
+            'Nº Cheque',            
+            'Vencimento',          
+            'Valor (R$)',         
+            'Destino',          
+            'Data Repasse',     
+            'Observações Gerais',
+            'Info Repasse',
+            'Status'
+        ]
+        
+        colunas_finais = [col for col in ordem_da_empresa if col in df.columns]
+        df = df[colunas_finais]
+
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Cheques Filtrados')
