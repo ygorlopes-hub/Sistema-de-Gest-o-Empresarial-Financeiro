@@ -215,6 +215,7 @@
 
                 <!-- Formulário Oculto de Exclusão em Lote -->
                 <form action="/deletar_cheques_lote" method="POST" id="formDeletarLote" onsubmit="return confirm('Tem certeza de que deseja excluir os cheques selecionados?');"></form>
+                <form action="/exportar_cheques_selecionados" method="POST" id="formExportarLote"></form>
 
                 <!-- Tabela de Dados dos Cheques -->
                 <div class="card mb-3">
@@ -226,6 +227,12 @@
                         <button type="button" class="btn btn-sm btn-primary fw-bold" onclick="abrirModalEditarLote()">
                             <i class="bi bi-pencil-square"></i> Editar Selecionados (<span class="contadorSelecionados">0</span>)
                         </button>
+                        <button type="button" class="btn btn-sm btn-success fw-bold" onclick="exportarSelecionados()">
+                            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Selecionados (<span class="contadorSelecionados">0</span>)
+                        </button>
+                        <span class="ms-2 px-3 py-1 bg-success bg-opacity-10 border border-success text-success rounded fw-bold small">
+                            Total Selecionado: R$ <span id="valorTotalSelecionado">0,00</span>
+                        </span>
                     </div>
                     <div class="card-body p-0 table-responsive">
                         <table class="table table-hover mb-0 align-middle" id="tabelaCheques">
@@ -925,35 +932,71 @@
 
     <script>
     // --- 2. Gerenciamento do Checkbox e Ações em Lote ---
-    document.addEventListener('DOMContentLoaded', () => {
-        const checkTodos = document.getElementById('checkTodos');
-        const checksCheque = document.querySelectorAll('.check-cheque');
-        const barraAcoesLote = document.getElementById('barraAcoesLote');
-        const contadores = document.querySelectorAll('.contadorSelecionados');
+        document.addEventListener('DOMContentLoaded', () => {
+            const checkTodos = document.getElementById('checkTodos');
+            const checksCheque = document.querySelectorAll('.check-cheque');
+            const barraAcoesLote = document.getElementById('barraAcoesLote');
+            const contadores = document.querySelectorAll('.contadorSelecionados');
+            const spanValorTotal = document.getElementById('valorTotalSelecionado');
 
-        function atualizarEstadoBotao() {
-            const selecionados = document.querySelectorAll('.check-cheque:checked').length;
-            contadores.forEach(c => c.textContent = selecionados);
-            if (barraAcoesLote) {
-                barraAcoesLote.style.display = selecionados > 0 ? 'flex' : 'none';
+            function atualizarEstadoBotao() {
+                const selecionados = document.querySelectorAll('.check-cheque:checked');
+                const qtd = selecionados.length;
+                
+                contadores.forEach(c => c.textContent = qtd);
+                
+                // Soma os valores dos cheques selecionados
+                let somaValores = 0;
+                selecionados.forEach(chk => {
+                    const tr = document.getElementById(`linha-cheque-${chk.value}`);
+                    if (tr) {
+                        const valor = parseFloat(tr.getAttribute('data-valor')) || 0;
+                        somaValores += valor;
+                    }
+                });
+
+                // Formata para o padrão monetário brasileiro (ex: 12.382,00)
+                if (spanValorTotal) {
+                    spanValorTotal.textContent = somaValores.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                }
+
+                if (barraAcoesLote) {
+                    barraAcoesLote.style.display = qtd > 0 ? 'flex' : 'none';
+                }
             }
-        }
 
-        if (checkTodos) {
-            checkTodos.addEventListener('change', (e) => {
-                checksCheque.forEach(chk => chk.checked = e.target.checked);
-                atualizarEstadoBotao();
-            });
-        }
+            if (checkTodos) {
+                checkTodos.addEventListener('change', (e) => {
+                    checksCheque.forEach(chk => chk.checked = e.target.checked);
+                    atualizarEstadoBotao();
+                });
+            }
 
-        checksCheque.forEach(chk => {
-            chk.addEventListener('change', () => {
-                if (!chk.checked && checkTodos) checkTodos.checked = false;
-                atualizarEstadoBotao();
+            checksCheque.forEach(chk => {
+                chk.addEventListener('change', () => {
+                    if (!chk.checked && checkTodos) checkTodos.checked = false;
+                    atualizarEstadoBotao();
+                });
             });
         });
-    });
 
+        // Função para enviar os IDs selecionados e baixar o Excel
+        function exportarSelecionados() {
+            const selecionados = document.querySelectorAll('.check-cheque:checked');
+            const formExportar = document.getElementById('formExportarLote');
+            formExportar.innerHTML = ''; // Limpa envios anteriores
+            
+            selecionados.forEach(chk => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'cheques_selecionados[]';
+                input.value = chk.value;
+                formExportar.appendChild(input);
+            });
+            
+            formExportar.submit();
+        }
+        
     // Função que abre o modal de edição em lote preenchendo os cards lado a lado
     function abrirModalEditarLote() {
         const selecionados = document.querySelectorAll('.check-cheque:checked');

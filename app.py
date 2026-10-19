@@ -880,14 +880,14 @@ def exportar_excel_cheques():
         df.columns = ['Banco', 'Nº Cheque', 'Data Recebimento', 'Cliente', 'Emissor', 'CNPJ/CPF', 'Vencimento', 'Valor (R$)', 'Destino', 'Data Repasse', 'Observações Gerais', 'Info Repasse', 'Status']
         ordem_da_empresa = [
             'Data Recebimento', 
-            'Cliente',            
+            'Cliente',          
             'Emissor',        
-            'CNPJ/CPF',          
+            'CNPJ/CPF',         
             'Banco',       
             'Nº Cheque',            
-            'Vencimento',          
-            'Valor (R$)',         
-            'Destino',          
+            'Vencimento',         
+            'Valor (R$)',        
+            'Destino',         
             'Data Repasse',     
             'Observações Gerais',
             'Info Repasse',
@@ -903,6 +903,53 @@ def exportar_excel_cheques():
     output.seek(0)
     
     return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name='cheques_filtrados.xlsx')
+
+
+@app.route('/exportar_cheques_selecionados', methods=['POST'])
+@login_required
+def exportar_cheques_selecionados():
+    ids_selecionados = request.form.getlist('cheques_selecionados[]')
+    
+    if not ids_selecionados:
+        return redirect(request.referrer or url_for('cheques'))
+        
+    conexao = get_conexao()
+    with conexao.cursor() as cursor:
+        placeholders = ', '.join(['%s'] * len(ids_selecionados))
+        colunas_sql = "banco, numero_cheque, data_recebimento, cliente, emissor, cnpj_cpf, data_bom_para, valor, destino, data_repasse, observacoes, info_repasse, status_cheque"
+        sql = f"SELECT {colunas_sql} FROM tb_cheques WHERE id IN ({placeholders}) ORDER BY id ASC"
+        cursor.execute(sql, tuple(ids_selecionados))
+        dados = cursor.fetchall()
+    conexao.close()
+
+    df = pd.DataFrame(dados)
+    if not df.empty:
+        df.columns = ['Banco', 'Nº Cheque', 'Data Recebimento', 'Cliente', 'Emissor', 'CNPJ/CPF', 'Vencimento', 'Valor (R$)', 'Destino', 'Data Repasse', 'Observações Gerais', 'Info Repasse', 'Status']
+        ordem_da_empresa = [
+            'Data Recebimento', 
+            'Cliente',          
+            'Emissor',        
+            'CNPJ/CPF',         
+            'Banco',       
+            'Nº Cheque',            
+            'Vencimento',         
+            'Valor (R$)',        
+            'Destino',         
+            'Data Repasse',     
+            'Observações Gerais',
+            'Info Repasse',
+            'Status'
+        ]
+        
+        colunas_finais = [col for col in ordem_da_empresa if col in df.columns]
+        df = df[colunas_finais]
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Cheques Selecionados')
+    output.seek(0)
+
+    return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name='cheques_selecionados.xlsx')
 
 @app.route('/atualizar_status_cheque/<int:id_cheque>/<status>', methods=['POST'])
 @login_required
