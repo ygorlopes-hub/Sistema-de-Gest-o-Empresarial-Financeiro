@@ -959,8 +959,8 @@ def exportar_romaneio():
     if not ids_selecionados:
         return redirect(request.referrer or url_for('cheques'))
 
-    empresa_pagadora = request.form.get('empresa_pagadora', '').strip()
-    cnpj_pagador = request.form.get('cnpj_pagador', '').strip()
+    empresa_pagadora = request.form.get('empresa_pagadora', 'RJ POLIMEROS DO BRASIL LTDA').strip()
+    cnpj_pagador = request.form.get('cnpj_pagador', '64.567.471-0001-69').strip()
     destinatario = request.form.get('destinatario', '').strip()
     cnpj_destinatario = request.form.get('cnpj_destinatario', '').strip()
     data_romaneio_raw = request.form.get('data_romaneio', '')
@@ -1088,7 +1088,7 @@ def exportar_romaneio():
     output.seek(0)
     nome_arquivo = f"romaneio_{data_romaneio_fmt.replace('/', '-')}.xlsx"
     return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name=nome_arquivo)
-
+    
 @app.route('/atualizar_status_cheque/<int:id_cheque>/<status>', methods=['POST'])
 @login_required
 def atualizar_status_cheque(id_cheque, status):
