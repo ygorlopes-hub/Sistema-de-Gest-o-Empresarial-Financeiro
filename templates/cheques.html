@@ -230,6 +230,9 @@
                         <button type="button" class="btn btn-sm btn-success fw-bold" onclick="exportarSelecionados()">
                             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Selecionados (<span class="contadorSelecionados">0</span>)
                         </button>
+                        <button type="button" class="btn btn-sm btn-warning text-dark fw-bold" onclick="abrirModalRomaneio()">
+                            <i class="bi bi-file-earmark-spreadsheet"></i> Exportar Romaneio (<span class="contadorSelecionados">0</span>)
+                        </button>
                         <span class="ms-2 px-3 py-1 bg-success bg-opacity-10 border border-success text-success rounded fw-bold small">
                             Total Selecionado: R$ <span id="valorTotalSelecionado">0,00</span>
                         </span>
@@ -629,6 +632,54 @@
         </div>
     </div>
 
+    <!-- Modal Exportar Romaneio -->
+    <div class="modal fade" id="modalRomaneio" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-spreadsheet"></i> Gerar Romaneio de Cheques</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/exportar_romaneio" method="POST" id="formRomaneio">
+                    <div class="modal-body p-4">
+                        <div id="hiddenInputsRomaneio"></div>
+
+                        <h6 class="fw-bold text-secondary border-bottom pb-1 mb-3">1. Dados do Pagador (Cabeçalho)</h6>
+                        <div class="mb-2">
+                            <label class="form-label fw-bold small mb-1">Empresa Pagadora</label>
+                            <input type="text" name="empresa_pagadora" class="form-control form-control-sm" value="RJ POLIMEROS DO BRASIL LTDA" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small mb-1">CNPJ Pagador</label>
+                            <input type="text" name="cnpj_pagador" class="form-control form-control-sm" value="64.567.471-0001-69" required>
+                        </div>
+
+                        <h6 class="fw-bold text-secondary border-bottom pb-1 mb-3 mt-4">2. Dados do Destinatário (Rodapé)</h6>
+                        <div class="mb-2">
+                            <label class="form-label fw-bold small mb-1">Destinatário</label>
+                            <input type="text" name="destinatario" id="inputDestinatarioRomaneio" class="form-control form-control-sm" list="listaDestinos" value="R M POLIMEROS" required>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label fw-bold small mb-1">CNPJ Destinatário</label>
+                                <input type="text" name="cnpj_destinatario" class="form-control form-control-sm" value="36.445.937/0001-18">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-bold small mb-1">Data do Romaneio</label>
+                                <input type="date" name="data_romaneio" id="dataRomaneioInput" class="form-control form-control-sm" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-warning text-dark fw-bold" onclick="bootstrap.Modal.getInstance(document.getElementById('modalRomaneio')).hide();">
+                            <i class="bi bi-download"></i> Baixar Planilha Romaneio
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     <!-- Modal Alterar Senha -->
     <div class="modal fade" id="modalAlterarSenha" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
@@ -997,6 +1048,40 @@
             formExportar.submit();
         }
         
+        // Função para abrir o modal do Romaneio e injetar os cheques selecionados
+        function abrirModalRomaneio() {
+            const selecionados = document.querySelectorAll('.check-cheque:checked');
+            const containerHidden = document.getElementById('hiddenInputsRomaneio');
+            containerHidden.innerHTML = '';
+            
+            let destinoComum = '';
+
+            selecionados.forEach((chk, index) => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'cheques_selecionados[]';
+                input.value = chk.value;
+                containerHidden.appendChild(input);
+
+                // Se o primeiro cheque já tiver um destino cadastrado, puxa como sugestão
+                if (index === 0) {
+                    const tr = document.getElementById(`linha-cheque-${chk.value}`);
+                    if (tr && tr.getAttribute('data-destino')) {
+                        destinoComum = tr.getAttribute('data-destino');
+                    }
+                }
+            });
+
+            if (destinoComum !== '') {
+                document.getElementById('inputDestinatarioRomaneio').value = destinoComum;
+            }
+
+            // Define a data de hoje por padrão no campo de data
+            const hoje = new Date().toISOString().split('T')[0];
+            document.getElementById('dataRomaneioInput').value = hoje;
+
+            new bootstrap.Modal(document.getElementById('modalRomaneio')).show();
+        }
     // Função que abre o modal de edição em lote preenchendo os cards lado a lado
     function abrirModalEditarLote() {
         const selecionados = document.querySelectorAll('.check-cheque:checked');

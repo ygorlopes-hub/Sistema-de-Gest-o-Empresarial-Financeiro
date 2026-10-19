@@ -7,6 +7,7 @@ import pandas as pd
 from datetime import date, timedelta
 import os
 from dotenv import load_dotenv
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # CARREGA O ARQUIVO .env AQUI
 load_dotenv()
@@ -950,6 +951,143 @@ def exportar_cheques_selecionados():
     output.seek(0)
 
     return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name='cheques_selecionados.xlsx')
+
+@app.route('/exportar_romaneio', methods=['POST'])
+@login_required
+def exportar_romaneio():
+    ids_selecionados = request.form.getlist('cheques_selecionados[]')
+    if not ids_selecionados:
+        return redirect(request.referrer or url_for('cheques'))
+
+    empresa_pagadora = request.form.get('empresa_pagadora', 'RJ POLIMEROS DO BRASIL LTDA').strip()
+    cnpj_pagador = request.form.get('cnpj_pagador', '64.567.471-0001-69').strip()
+    destinatario = request.form.get('destinatario', '').strip()
+    cnpj_destinatario = request.form.get('cnpj_destinatario', '').strip()
+    data_romaneio_raw = request.form.get('data_romaneio', '')
+
+    # Formata a data do romaneio para DD/MM/AAAA
+    if data_romaneio_raw:
+        partes = data_romaneio_raw.split('-')
+        data_romaneio_fmt = f"{partes[2]}/{partes[1]}/{partes[0]}" if len(partes) == 3 else data_romaneio_raw
+    else:
+        data_romaneio_fmt = date.today().strftime('%d/%m/%Y')
+
+    conexao = get_conexao()
+    with conexao.cursor() as cursor:
+        placeholders = ', '.join(['%s'] * len(ids_selecionados))
+        sql = f"""
+            SELECT banco, numero_cheque, cnpj_cpf, emissor, cliente, valor, data_bom_para 
+            FROM tb_cheques 
+            WHERE id IN ({placeholders}) 
+            ORDER BY data_bom_para ASC, id ASC
+        """
+        cursor.execute(sql, tuple(ids_selecionados))
+        cheques = cursor.fetchall()
+    conexao.close()
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        workbook = writer.book
+        ws = workbook.create_sheet(title='Romaneio')
+
+        # Estilos visuais idênticos à planilha modelo
+        fonte_padrao = Font(name='Calibri', size=11)
+        fonte_negrito = Font(name='Calibri', size=11, bold=True)
+        preenchimento_cabecalho = PatternFill(start_color='D9D9D9', end_color='D9D9D9', fill_type='solid')
+        preenchimento_amarelo = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
+        
+        borda_fina = Side(border_style='thin', color='000000')
+        borda_completa = Border(left=borda_fina, right=borda_fina, top=borda_fina, bottom=borda_fina)
+        
+        alin_centro = Alignment(horizontal='center', vertical='center')
+        alin_esquerda = Alignment(horizontal='left', vertical='center')
+        alin_direita = Alignment(horizontal='right', vertical='center')
+
+        # 1. Cabeçalho Superior (Linhas 1 e 2)
+        ws['A1'] = f"Declaro que recebi os cheques abaixo referentes a pagamento efetuado pela {empresa_pagadora}"
+        ws['A1'].font = fonte_padrao
+        ws['A2'] = f"CNPJ: {cnpj_pagador}"
+        ws['A2'].font = fonte_padrao
+
+        # 2. Cabeçalho da Tabela (Linha 4)
+        cabecalhos = ['BCO', 'N º CHQ', 'CPF/CNPJ', 'NOME', 'VALOR', 'DATA']
+        for col_idx, texto in enumerate(cabecalhos, start=1):
+            celula = ws.cell(row=4, column=col_idx, value=texto)
+            celula.font = fonte_negrito
+            celula.fill = preenchimento_cabecalho
+            celula.alignment = alin_centro
+            celula.border = borda_completa
+
+        # 3. Listagem dos Cheques (A partir da Linha 5)
+        linha_atual = 5
+        valor_total = 0.0
+
+        for ch in cheques:
+            nome_exibicao = ch['emissor'] if ch['emissor'] and str(ch['emissor']).strip() != '' else ch['cliente']
+            valor_ch = float(ch['valor']) if ch['valor'] else 0.0
+            valor_total += valor_ch
+            data_venc = ch['data_bom_para'].strftime('%d/%m/%Y') if ch['data_bom_para'] else ''
+
+            c_bco = ws.cell(row=linha_atual, column=1, value=ch['banco'] or '')
+            c_num = ws.cell(row=linha_atual, column=2, value=ch['numero_cheque'] or '')
+            c_doc = ws.cell(row=linha_atual, column=3, value=ch['cnpj_cpf'] or '')
+            c_nom = ws.cell(row=linha_atual, column=4, value=nome_exibicao or '')
+            c_val = ws.cell(row=linha_atual, column=5, value=valor_ch)
+            c_dat = ws.cell(row=linha_atual, column=6, value=data_venc)
+
+            # Aplica fontes e bordas
+            for cel in (c_bco, c_num, c_doc, c_nom, c_val, c_dat):
+                cel.font = fonte_padrao
+                cel.border = borda_completa
+
+            # Alinhamentos específicos de cada coluna
+            c_bco.alignment = alin_centro
+            c_num.alignment = alin_centro
+            c_doc.alignment = alin_esquerda
+            c_nom.alignment = alin_esquerda
+            c_val.alignment = alin_direita
+            c_val.number_format = '"R$" #,##0.00'
+            c_dat.alignment = alin_centro
+
+            linha_atual += 1
+
+        # 4. Linha de Total (1 linha em branco após a tabela)
+        linha_total = linha_atual + 1
+        
+        cel_label_total = ws.cell(row=linha_total, column=4, value='TOTAL')
+        cel_label_total.font = fonte_negrito
+        cel_label_total.alignment = alin_esquerda
+        cel_label_total.border = borda_completa
+
+        cel_val_total = ws.cell(row=linha_total, column=5, value=valor_total)
+        cel_val_total.font = fonte_negrito
+        cel_val_total.fill = preenchimento_amarelo
+        cel_val_total.alignment = alin_direita
+        cel_val_total.border = borda_completa
+        cel_val_total.number_format = '"R$" #,##0.00'
+
+        # 5. Rodapé com Dados do Destinatário
+        linha_rodape = linha_total + 1
+        
+        ws.cell(row=linha_rodape, column=1, value='DESTINATÁRIO:').font = fonte_padrao
+        ws.cell(row=linha_rodape, column=3, value=destinatario).font = fonte_padrao
+
+        ws.cell(row=linha_rodape + 1, column=1, value='CNPJ:').font = fonte_padrao
+        ws.cell(row=linha_rodape + 1, column=3, value=cnpj_destinatario).font = fonte_padrao
+
+        ws.cell(row=linha_rodape + 2, column=1, value='DATA:').font = fonte_padrao
+        ws.cell(row=linha_rodape + 2, column=3, value=data_romaneio_fmt).font = fonte_padrao
+
+        ws.cell(row=linha_rodape + 3, column=1, value='IDENTIFICAÇÃO, ASSINATURA E CARIMBO DO DESTINATÁRIO').font = fonte_padrao
+
+        # 6. Ajuste de Largura das Colunas para não cortar textos
+        larguras = {'A': 14, 'B': 12, 'C': 20, 'D': 42, 'E': 16, 'F': 14}
+        for col_letra, largura in larguras.items():
+            ws.column_dimensions[col_letra].width = largura
+
+    output.seek(0)
+    nome_arquivo = f"romaneio_{data_romaneio_fmt.replace('/', '-')}.xlsx"
+    return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name=nome_arquivo)
 
 @app.route('/atualizar_status_cheque/<int:id_cheque>/<status>', methods=['POST'])
 @login_required
