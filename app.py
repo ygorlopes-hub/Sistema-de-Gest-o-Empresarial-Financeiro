@@ -959,8 +959,8 @@ def exportar_romaneio():
     if not ids_selecionados:
         return redirect(request.referrer or url_for('cheques'))
 
-    empresa_pagadora = request.form.get('empresa_pagadora', 'RJ POLIMEROS DO BRASIL LTDA').strip()
-    cnpj_pagador = request.form.get('cnpj_pagador', '64.567.471-0001-69').strip()
+    empresa_pagadora = request.form.get('empresa_pagadora', '').strip()
+    cnpj_pagador = request.form.get('cnpj_pagador', '').strip()
     destinatario = request.form.get('destinatario', '').strip()
     cnpj_destinatario = request.form.get('cnpj_destinatario', '').strip()
     data_romaneio_raw = request.form.get('data_romaneio', '')
