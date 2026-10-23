@@ -1,22 +1,21 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, session
-from functools import wraps
-from flask_socketio import SocketIO, emit
 import io
-import pymysql
-import pandas as pd
-from datetime import date, timedelta
 import os
-from dotenv import load_dotenv
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from datetime import date, timedelta
+from functools import wraps
 
-# CARREGA O ARQUIVO .env AQUI
+import pandas as pd
+import pymysql
+from dotenv import load_dotenv
+from flask import Flask, redirect, render_template, request, send_file, session, url_for
+from flask_socketio import SocketIO
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
 load_dotenv()
 
 # ==========================================
 # CONFIGURAÇÃO DO APLICATIVO
 # ==========================================
 app = Flask(__name__)
-# Lê a secret key do .env também
 app.secret_key = os.getenv('SECRET_KEY', 'chave_secreta_empresa_123')
 socketio = SocketIO(app)
 
@@ -24,7 +23,7 @@ def get_conexao():
     return pymysql.connect(
         host=os.getenv('DB_HOST', 'localhost'),
         user=os.getenv('DB_USER', 'root'),
-        password=os.getenv('DB_PASSWORD', 'blembalagens'), # Se o .env falhar, ele usa essa de garantia (opcional, se for uso local)
+        password=os.getenv('DB_PASSWORD', 'blembalagens'),
         database=os.getenv('DB_NAME', 'teste_empresa'),
         cursorclass=pymysql.cursors.DictCursor
     )
@@ -35,7 +34,7 @@ def get_conexao():
 def registrar_log(acao, detalhes=""):
     usuario = session.get('usuario_nome', 'Desconhecido')
     ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
-    
+
     try:
         conexao = get_conexao()
         with conexao.cursor() as cursor:
@@ -66,18 +65,173 @@ def admin_required(f):
 # ==========================================
 # MÓDULO: AUTENTICAÇÃO
 # ==========================================
+def montar_filtros_cheques():
+    """Monta os filtros SQL compartilhados pelos cheques."""
+    termo = request.args.get('pesquisa', '').strip()
+    banco_filtro = request.args.get('banco', '').strip()
+    status_filtro = request.args.get('status', '').strip()
+    data_inicio = request.args.get('data_inicio', '')
+    data_fim = request.args.get('data_fim', '')
+    filtro_emissor = request.args.get('filtro_emissor', '').strip()
+    filtro_rec_inicio = request.args.get('filtro_rec_inicio', '').strip()
+    filtro_rec_fim = request.args.get('filtro_rec_fim', '').strip()
+    filtro_venc_inicio = request.args.get('filtro_venc_inicio', '').strip()
+    filtro_venc_fim = request.args.get('filtro_venc_fim', '').strip()
+    filtro_valor_min = request.args.get('filtro_valor_min', '').strip()
+    filtro_valor_max = request.args.get('filtro_valor_max', '').strip()
+    filtro_numero_cheque = request.args.get('filtro_numero_cheque', '').strip()
+    filtro_destino = request.args.get('filtro_destino', '').strip()
+    filtro_rep_inicio = request.args.get('filtro_rep_inicio', '').strip()
+    filtro_rep_fim = request.args.get('filtro_rep_fim', '').strip()
+
+    query_base = "FROM tb_cheques WHERE 1=1"
+    params = []
+
+    if termo:
+        query_base += " AND (cliente LIKE %s OR emissor LIKE %s OR numero_cheque LIKE %s OR banco LIKE %s OR status_cheque LIKE %s)"
+        termo_like = f"%{termo}%"
+        params.extend([termo_like, termo_like, termo_like, termo_like, termo_like])
+
+    if banco_filtro:
+        query_base += " AND banco = %s"
+        params.append(banco_filtro)
+
+    if status_filtro:
+        if status_filtro == 'Pendente':
+            query_base += " AND (status_cheque = 'Pendente' OR status_cheque IS NULL)"
+        else:
+            query_base += " AND status_cheque = %s"
+            params.append(status_filtro)
+
+    if data_inicio:
+        query_base += " AND data_bom_para >= %s"
+        params.append(data_inicio)
+
+    if data_fim:
+        query_base += " AND data_bom_para <= %s"
+        params.append(data_fim)
+
+    if filtro_emissor:
+        query_base += " AND (cliente LIKE %s OR emissor LIKE %s)"
+        params.extend([f"%{filtro_emissor}%", f"%{filtro_emissor}%"])
+
+    if filtro_rec_inicio:
+        query_base += " AND data_recebimento >= %s"
+        params.append(filtro_rec_inicio)
+    if filtro_rec_fim:
+        query_base += " AND data_recebimento <= %s"
+        params.append(filtro_rec_fim)
+
+    if filtro_venc_inicio:
+        query_base += " AND data_bom_para >= %s"
+        params.append(filtro_venc_inicio)
+    if filtro_venc_fim:
+        query_base += " AND data_bom_para <= %s"
+        params.append(filtro_venc_fim)
+
+    if filtro_valor_min:
+        query_base += " AND valor >= %s"
+        params.append(filtro_valor_min)
+    if filtro_valor_max:
+        query_base += " AND valor <= %s"
+        params.append(filtro_valor_max)
+
+    if filtro_numero_cheque:
+        query_base += " AND numero_cheque LIKE %s"
+        params.append(f"%{filtro_numero_cheque}%")
+
+    if filtro_destino:
+        termo_pesquisa = filtro_destino.strip()
+        partes_data = termo_pesquisa.split('/')
+        termo_sql_data = ""
+        if len(partes_data) == 3 and len(partes_data[2]) == 4:
+            termo_sql_data = f"{partes_data[2]}-{partes_data[1]}-{partes_data[0]}"
+        elif len(partes_data) == 2:
+            termo_sql_data = f"-{partes_data[1]}-{partes_data[0]}"
+
+        if termo_sql_data:
+            query_base += " AND (destino LIKE %s OR info_repasse LIKE %s OR data_repasse LIKE %s)"
+            termo_like = f"%{termo_pesquisa}%"
+            termo_data_like = f"%{termo_sql_data}%"
+            params.extend([termo_like, termo_like, termo_data_like])
+        else:
+            query_base += " AND (destino LIKE %s OR info_repasse LIKE %s OR CAST(data_repasse AS CHAR) LIKE %s)"
+            termo_like = f"%{termo_pesquisa}%"
+            params.extend([termo_like, termo_like, termo_like])
+
+    if filtro_rep_inicio:
+        query_base += " AND data_repasse >= %s"
+        params.append(filtro_rep_inicio)
+
+    if filtro_rep_fim:
+        query_base += " AND data_repasse <= %s"
+        params.append(filtro_rep_fim)
+
+    return query_base, params
+
+
+def gerar_excel_cheques(dados, nome_planilha, nome_arquivo):
+    """Gera as planilhas de cheques na ordem usada pela empresa."""
+    df = pd.DataFrame(dados)
+    if not df.empty:
+        df.columns = ['Banco', 'Nº Cheque', 'Data Recebimento', 'Cliente', 'Emissor', 'CNPJ/CPF', 'Vencimento', 'Valor (R$)', 'Destino', 'Data Repasse', 'Observações Gerais', 'Info Repasse', 'Status']
+        ordem_da_empresa = [
+            'Data Recebimento',
+            'Cliente',
+            'Emissor',
+            'CNPJ/CPF',
+            'Banco',
+            'Nº Cheque',
+            'Vencimento',
+            'Valor (R$)',
+            'Destino',
+            'Data Repasse',
+            'Observações Gerais',
+            'Info Repasse',
+            'Status'
+        ]
+
+        colunas_finais = [col for col in ordem_da_empresa if col in df.columns]
+        df = df[colunas_finais]
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name=nome_planilha)
+    output.seek(0)
+
+    return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name=nome_arquivo)
+
+
+def get_valor_seguro(linha, colunas_possiveis):
+    for col in colunas_possiveis:
+        if col in linha and pd.notna(linha[col]) and str(linha[col]).strip() != '':
+            return linha[col]
+    return None
+
+
+def parse_data(val):
+    if pd.isna(val) or val == '' or str(val).strip().lower() == 'nan':
+        return None
+    try:
+        dt = pd.to_datetime(val, dayfirst=True)
+        if pd.isna(dt): return None
+        return dt.strftime('%Y-%m-%d')
+    except:
+        return None
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         usuario = request.form.get('usuario')
         senha = request.form.get('senha')
-        
+
         conexao = get_conexao()
         with conexao.cursor() as cursor:
             cursor.execute("SELECT * FROM tb_usuarios WHERE usuario = %s AND senha = %s", (usuario, senha))
             user = cursor.fetchone()
         conexao.close()
-        
+
         if user:
             session['usuario_id'] = user['id']
             session['usuario_nome'] = user['nome']
@@ -115,9 +269,9 @@ def dashboard():
 
         if qtd <= minimo:
             p['alerta'] = 'Comprar Urgente!'
-            p['cor'] = 'danger' 
+            p['cor'] = 'danger'
             abaixo_minimo += 1
-        elif qtd <= minimo + 5: 
+        elif qtd <= minimo + 5:
             p['alerta'] = 'Atenção'
             p['cor'] = 'warning text-dark'
             estoque_adequado += 1
@@ -138,11 +292,11 @@ def atualizar_estoque():
     with conexao.cursor() as cursor:
         sql = "UPDATE tb_estoque SET quantidade = quantidade + %s WHERE produto = %s"
         cursor.execute(sql, (qtd_adicional, produto_escolhido))
-        
+
         sql_hist = "INSERT INTO tb_historico (produto, acao, quantidade) VALUES (%s, 'Entrada', %s)"
         cursor.execute(sql_hist, (produto_escolhido, qtd_adicional))
-        
-        conexao.commit() 
+
+        conexao.commit()
     conexao.close()
     return redirect(url_for('dashboard'))
 
@@ -156,11 +310,11 @@ def retirar_estoque():
     with conexao.cursor() as cursor:
         sql = "UPDATE tb_estoque SET quantidade = quantidade - %s WHERE produto = %s"
         cursor.execute(sql, (qtd_retirada, produto_escolhido))
-        
+
         sql_hist = "INSERT INTO tb_historico (produto, acao, quantidade) VALUES (%s, 'Saída', %s)"
         cursor.execute(sql_hist, (produto_escolhido, qtd_retirada))
-        
-        conexao.commit() 
+
+        conexao.commit()
     conexao.close()
     return redirect(url_for('dashboard'))
 
@@ -170,17 +324,17 @@ def adicionar_material():
     novo_produto = request.form.get('produto')
     nova_quantidade = request.form.get('quantidade')
     novo_minimo = request.form.get('estoque_minimo')
-    novo_status = request.form.get('status') 
+    novo_status = request.form.get('status')
 
     conexao = get_conexao()
     with conexao.cursor() as cursor:
         sql = "INSERT INTO tb_estoque (produto, quantidade, estoque_minimo, status) VALUES (%s, %s, %s, %s)"
         cursor.execute(sql, (novo_produto, nova_quantidade, novo_minimo, novo_status))
-        
+
         sql_hist = "INSERT INTO tb_historico (produto, acao, quantidade) VALUES (%s, 'Cadastro', %s)"
         cursor.execute(sql_hist, (novo_produto, nova_quantidade))
-        
-        conexao.commit() 
+
+        conexao.commit()
     conexao.close()
     return redirect(url_for('dashboard'))
 
@@ -194,7 +348,7 @@ def deletar_material():
     with conexao.cursor() as cursor:
         sql = "DELETE FROM tb_estoque WHERE produto = %s"
         cursor.execute(sql, (produto_excluir,))
-        conexao.commit() 
+        conexao.commit()
     conexao.close()
     return redirect(url_for('dashboard'))
 
@@ -217,17 +371,17 @@ def importar_excel():
         planilha = pd.read_excel(arquivo)
         conexao = get_conexao()
         with conexao.cursor() as cursor:
-            for index, linha in planilha.iterrows():
+            for _, linha in planilha.iterrows():
                 produto = str(linha['Produto'])
                 quantidade = int(linha['Quantidade'])
                 minimo = int(linha['Estoque Minimo'])
-                
+
                 sql = "INSERT INTO tb_estoque (produto, quantidade, estoque_minimo, status) VALUES (%s, %s, %s, 'Ativo')"
                 cursor.execute(sql, (produto, quantidade, minimo))
-                
+
                 sql_hist = "INSERT INTO tb_historico (produto, acao, quantidade) VALUES (%s, 'Importação Excel', %s)"
                 cursor.execute(sql_hist, (produto, quantidade))
-                
+
             conexao.commit()
         conexao.close()
     return redirect(url_for('dashboard'))
@@ -244,7 +398,7 @@ def financeiro():
     ano_atual = str(hoje.year)
 
     if request.method == 'POST':
-        mes_ano = request.form.get('mes_filtro') 
+        mes_ano = request.form.get('mes_filtro')
         if mes_ano:
             ano_atual, mes_atual = mes_ano.split('-')
 
@@ -252,12 +406,12 @@ def financeiro():
     with conexao.cursor() as cursor:
         cursor.execute("SELECT * FROM tb_financeiro WHERE MONTH(data_vencimento) = %s AND YEAR(data_vencimento) = %s ORDER BY data_vencimento ASC", (mes_atual, ano_atual))
         contas = cursor.fetchall()
-        
+
         cursor.execute("""
-            SELECT data_vencimento, SUM(valor) as total 
-            FROM tb_financeiro 
-            WHERE MONTH(data_vencimento) = %s AND YEAR(data_vencimento) = %s 
-            GROUP BY data_vencimento 
+            SELECT data_vencimento, SUM(valor) as total
+            FROM tb_financeiro
+            WHERE MONTH(data_vencimento) = %s AND YEAR(data_vencimento) = %s
+            GROUP BY data_vencimento
             ORDER BY data_vencimento ASC
         """, (mes_atual, ano_atual))
         dados_grafico_raw = cursor.fetchall()
@@ -356,19 +510,19 @@ def importar_excel_financeiro():
         planilha = pd.read_excel(arquivo)
         conexao = get_conexao()
         with conexao.cursor() as cursor:
-            for index, linha in planilha.iterrows():
+            for _, linha in planilha.iterrows():
                 descricao = str(linha['Descricao'])
                 valor = float(linha['Valor'])
                 data_vencimento = pd.to_datetime(linha['Data Vencimento']).strftime('%Y-%m-%d')
-                
+
                 sql_verifica = "SELECT id FROM tb_financeiro WHERE descricao = %s AND valor = %s AND data_vencimento = %s"
                 cursor.execute(sql_verifica, (descricao, valor, data_vencimento))
                 conta_existe = cursor.fetchone()
-                
+
                 if not conta_existe:
                     sql_insere = "INSERT INTO tb_financeiro (descricao, valor, data_vencimento) VALUES (%s, %s, %s)"
                     cursor.execute(sql_insere, (descricao, valor, data_vencimento))
-                
+
             conexao.commit()
         conexao.close()
     return redirect(url_for('financeiro'))
@@ -403,89 +557,7 @@ def cheques():
     per_page = 50
     offset = (page - 1) * per_page
 
-    query_base = "FROM tb_cheques WHERE 1=1"
-    params = []
-
-    if termo:
-        query_base += " AND (cliente LIKE %s OR emissor LIKE %s OR numero_cheque LIKE %s OR banco LIKE %s OR status_cheque LIKE %s)"
-        termo_like = f"%{termo}%"
-        params.extend([termo_like, termo_like, termo_like, termo_like, termo_like])
-        
-    if banco_filtro:
-        query_base += " AND banco = %s"
-        params.append(banco_filtro)
-
-    if status_filtro:
-        if status_filtro == 'Pendente':
-            query_base += " AND (status_cheque = 'Pendente' OR status_cheque IS NULL)"
-        else:
-            query_base += " AND status_cheque = %s"
-            params.append(status_filtro)
-            
-    if data_inicio:
-        query_base += " AND data_bom_para >= %s"
-        params.append(data_inicio)
-        
-    if data_fim:
-        query_base += " AND data_bom_para <= %s"
-        params.append(data_fim)
-
-    if filtro_emissor:
-        query_base += " AND (cliente LIKE %s OR emissor LIKE %s)"
-        params.extend([f"%{filtro_emissor}%", f"%{filtro_emissor}%"])
-        
-    if filtro_rec_inicio:
-        query_base += " AND data_recebimento >= %s"
-        params.append(filtro_rec_inicio)
-    if filtro_rec_fim:
-        query_base += " AND data_recebimento <= %s"
-        params.append(filtro_rec_fim)
-        
-    if filtro_venc_inicio:
-        query_base += " AND data_bom_para >= %s"
-        params.append(filtro_venc_inicio)
-    if filtro_venc_fim:
-        query_base += " AND data_bom_para <= %s"
-        params.append(filtro_venc_fim)
-        
-    if filtro_valor_min:
-        query_base += " AND valor >= %s"
-        params.append(filtro_valor_min)
-
-    if filtro_valor_max:
-        query_base += " AND valor <= %s"
-        params.append(filtro_valor_max)
-
-    if filtro_numero_cheque:
-        query_base += " AND numero_cheque LIKE %s"
-        params.append(f"%{filtro_numero_cheque}%")
-
-    if filtro_destino:
-        termo_pesquisa = filtro_destino.strip()
-        partes_data = termo_pesquisa.split('/')
-        termo_sql_data = ""
-        if len(partes_data) == 3 and len(partes_data[2]) == 4:
-            termo_sql_data = f"{partes_data[2]}-{partes_data[1]}-{partes_data[0]}"
-        elif len(partes_data) == 2:
-            termo_sql_data = f"-{partes_data[1]}-{partes_data[0]}"
-
-        if termo_sql_data:
-            query_base += " AND (destino LIKE %s OR info_repasse LIKE %s OR data_repasse LIKE %s)"
-            termo_like = f"%{termo_pesquisa}%"
-            termo_data_like = f"%{termo_sql_data}%"
-            params.extend([termo_like, termo_like, termo_data_like])
-        else:
-            query_base += " AND (destino LIKE %s OR info_repasse LIKE %s OR CAST(data_repasse AS CHAR) LIKE %s)"
-            termo_like = f"%{termo_pesquisa}%"
-            params.extend([termo_like, termo_like, termo_like])
-
-    if filtro_rep_inicio:
-        query_base += " AND data_repasse >= %s"
-        params.append(filtro_rep_inicio)
-
-    if filtro_rep_fim:
-        query_base += " AND data_repasse <= %s"
-        params.append(filtro_rep_fim)
+    query_base, params = montar_filtros_cheques()
 
     conexao = get_conexao()
     with conexao.cursor() as cursor:
@@ -496,7 +568,7 @@ def cheques():
         total_registros = cursor.fetchone()['total']
 
         query_resumo = f"""
-            SELECT 
+            SELECT
                 SUM(valor) as valor_total,
                 SUM(CASE WHEN status_cheque = 'Compensado' THEN 1 ELSE 0 END) as compensados,
                 SUM(CASE WHEN status_cheque = 'Repassado' THEN 1 ELSE 0 END) as repassados,
@@ -506,7 +578,7 @@ def cheques():
         """
         cursor.execute(query_resumo, tuple(params))
         resumo = cursor.fetchone()
-        
+
         resumo['valor_total'] = resumo['valor_total'] or 0
         resumo['compensados'] = int(resumo['compensados'] or 0)
         resumo['repassados'] = int(resumo['repassados'] or 0)
@@ -515,16 +587,16 @@ def cheques():
 
         cursor.execute("SELECT DISTINCT banco FROM tb_cheques WHERE banco IS NOT NULL AND banco != '' AND banco != 'nan' ORDER BY banco")
         bancos_db = [str(row['banco']).strip() for row in cursor.fetchall() if row['banco']]
-        
+
         cursor.execute("SELECT DISTINCT cliente FROM tb_cheques WHERE cliente IS NOT NULL AND cliente != '' AND cliente != 'nan' ORDER BY cliente")
         clientes_db = [str(row['cliente']).strip() for row in cursor.fetchall() if row['cliente']]
-        
+
         cursor.execute("SELECT DISTINCT emissor FROM tb_cheques WHERE emissor IS NOT NULL AND emissor != '' AND emissor != 'nan' ORDER BY emissor")
         emissores_db = [str(row['emissor']).strip() for row in cursor.fetchall() if row['emissor']]
 
         cursor.execute("SELECT DISTINCT cnpj_cpf FROM tb_cheques WHERE cnpj_cpf IS NOT NULL AND cnpj_cpf != '' AND cnpj_cpf != 'nan' ORDER BY cnpj_cpf")
         cnpjs_db = [str(row['cnpj_cpf']).strip() for row in cursor.fetchall() if row['cnpj_cpf']]
-        
+
         cursor.execute("SELECT DISTINCT destino FROM tb_cheques WHERE destino IS NOT NULL AND destino != '' AND destino != 'nan' ORDER BY destino")
         destinos_db = [str(row['destino']).strip() for row in cursor.fetchall() if row['destino']]
 
@@ -541,13 +613,13 @@ def cheques():
         lista_cheques = cursor.fetchall()
 
         cursor.execute("""
-            SELECT DISTINCT emissor AS nome, cnpj_cpf 
-            FROM tb_cheques 
-            WHERE emissor IS NOT NULL AND emissor != '' 
+            SELECT DISTINCT emissor AS nome, cnpj_cpf
+            FROM tb_cheques
+            WHERE emissor IS NOT NULL AND emissor != ''
             ORDER BY emissor ASC
         """)
         lista_emissores = cursor.fetchall()
-        
+
     conexao.close()
 
     total_pages = (total_registros + per_page - 1) // per_page
@@ -578,17 +650,17 @@ def cheques():
     }
 
     return render_template(
-        'cheques.html', 
-        cheques=lista_cheques, 
-        page=page, 
-        total_pages=total_pages, 
-        total_registros=total_registros, 
-        bancos=bancos_db, 
-        clientes=clientes_db, 
-        emissores=emissores_db, 
-        cnpjs=cnpjs_db, 
-        destinos=destinos_db, 
-        filtros=filtros, 
+        'cheques.html',
+        cheques=lista_cheques,
+        page=page,
+        total_pages=total_pages,
+        total_registros=total_registros,
+        bancos=bancos_db,
+        clientes=clientes_db,
+        emissores=emissores_db,
+        cnpjs=cnpjs_db,
+        destinos=destinos_db,
+        filtros=filtros,
         resumo=resumo,
         lista_emissores=lista_emissores
     )
@@ -613,11 +685,11 @@ def adicionar_cheque():
     with conexao.cursor() as cursor:
         cheques_cadastrados = 0
         cheques_atualizados = 0
-        
+
         for i in range(len(numeros)):
             if not numeros[i].strip():
-                continue 
-                
+                continue
+
             # Tratamento limpo das variáveis
             data_rec = datas_rec[i] if datas_rec[i] else None
             cliente = clientes[i]
@@ -634,17 +706,17 @@ def adicionar_cheque():
 
             # 1. VERIFICA SE O CHEQUE JÁ EXISTE NO BANCO DE DADOS
             sql_verifica = """
-                SELECT id FROM tb_cheques 
+                SELECT id FROM tb_cheques
                 WHERE banco = %s AND numero_cheque = %s AND emissor = %s AND data_bom_para = %s AND valor = %s
             """
             cursor.execute(sql_verifica, (banco, numero, emissor, data_venc, valor))
             cheque_existente = cursor.fetchone()
-            
+
             if not cheque_existente:
                 # Se NÃO existe, insere um novo
                 sql_insere = """
-                    INSERT INTO tb_cheques 
-                    (data_recebimento, cliente, emissor, cnpj_cpf, banco, numero_cheque, data_bom_para, valor, destino, data_repasse, observacoes, info_repasse) 
+                    INSERT INTO tb_cheques
+                    (data_recebimento, cliente, emissor, cnpj_cpf, banco, numero_cheque, data_bom_para, valor, destino, data_repasse, observacoes, info_repasse)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 cursor.execute(sql_insere, (data_rec, cliente, emissor, cnpj_cpf, banco, numero, data_venc, valor, destino, data_rep, obs, info_rep))
@@ -653,18 +725,18 @@ def adicionar_cheque():
                 # Se JÁ existe, apenas atualiza as informações extras (evita duplicação)
                 id_cheque = cheque_existente['id']
                 sql_atualiza = """
-                    UPDATE tb_cheques 
-                    SET data_recebimento = %s, cliente = %s, cnpj_cpf = %s, destino = %s, 
+                    UPDATE tb_cheques
+                    SET data_recebimento = %s, cliente = %s, cnpj_cpf = %s, destino = %s,
                         data_repasse = %s, observacoes = %s, info_repasse = %s
                     WHERE id = %s
                 """
                 cursor.execute(sql_atualiza, (data_rec, cliente, cnpj_cpf, destino, data_rep, obs, info_rep, id_cheque))
                 cheques_atualizados += 1
-            
+
         conexao.commit()
         registrar_log("CADASTROU CHEQUES", f"Cadastrou {cheques_cadastrados} e atualizou {cheques_atualizados} cheque(s) via lote manual.")
     conexao.close()
-    
+
     socketio.emit('atualizar_tela')
     return redirect(url_for('cheques'))
 
@@ -676,84 +748,70 @@ def importar_excel_cheques():
     if arquivo:
         planilha = pd.read_excel(arquivo)
         planilha.columns = [str(c).strip().upper() for c in planilha.columns]
-        
+
         conexao = get_conexao()
         with conexao.cursor() as cursor:
-            for index, linha in planilha.iterrows():
-                def get_valor_seguro(colunas_possiveis):
-                    for col in colunas_possiveis:
-                        if col in linha and pd.notna(linha[col]) and str(linha[col]).strip() != '':
-                            return linha[col]
-                    return None
+            for _, linha in planilha.iterrows():
 
-                num_cheque = get_valor_seguro(['Nº CHEQUE', 'NUMERO CHEQUE', 'CHEQUE'])
-                vencimento = get_valor_seguro(['VENC.', 'VENCIMENTO', 'BOM PARA'])
-                
+                num_cheque = get_valor_seguro(linha, ['Nº CHEQUE', 'NUMERO CHEQUE', 'CHEQUE'])
+                vencimento = get_valor_seguro(linha, ['VENC.', 'VENCIMENTO', 'BOM PARA'])
+
                 if not num_cheque or not vencimento:
                     continue
-                
+
                 numero = str(num_cheque).split('.')[0].strip()
                 banco = str(linha.get('BANCO', '')).strip()
                 if banco == 'nan': banco = ''
-                
+
                 cliente = str(linha.get('CLIENTE', '')).strip()
                 if cliente == 'nan': cliente = ''
-                
+
                 emissor = str(linha.get('EMISSOR', '')).strip()
                 if not emissor or emissor == 'nan':
                     emissor = cliente
-                
-                cnpj_cpf = str(get_valor_seguro(['CNPJ/CPF', 'CNPJ', 'CPF']) or '').strip()
+
+                cnpj_cpf = str(get_valor_seguro(linha, ['CNPJ/CPF', 'CNPJ', 'CPF']) or '').strip()
                 if cnpj_cpf == 'nan': cnpj_cpf = ''
-                
-                valor = float(get_valor_seguro(['VALOR', 'R$ VALOR', 'R$']) or 0)
+
+                valor = float(get_valor_seguro(linha, ['VALOR', 'R$ VALOR', 'R$']) or 0)
                 destino = str(linha.get('DESTINO', '')).strip()
                 if destino == 'nan': destino = ''
-                
-                obs = str(get_valor_seguro(['OBS', 'OBSERVAÇÕES', 'OBSERVACOES']) or '').strip()
-                info_rep = str(get_valor_seguro(['INFO REPASSE', 'REPASSE']) or '').strip()
-                
+
+                obs = str(get_valor_seguro(linha, ['OBS', 'OBSERVAÇÕES', 'OBSERVACOES']) or '').strip()
+                info_rep = str(get_valor_seguro(linha, ['INFO REPASSE', 'REPASSE']) or '').strip()
+
                 if obs == 'nan': obs = ''
                 if info_rep == 'nan': info_rep = ''
-                
-                def parse_data(val):
-                    if pd.isna(val) or val == '' or str(val).strip().lower() == 'nan': 
-                        return None
-                    try:
-                        dt = pd.to_datetime(val, dayfirst=True)
-                        if pd.isna(dt): return None
-                        return dt.strftime('%Y-%m-%d')
-                    except:
-                        return None
 
-                data_rec_raw = get_valor_seguro(['DATA', 'DT', 'DATA RECEBIMENTO', 'DATA RECEB', 'RECEBIMENTO'])
+
+                data_rec_raw = get_valor_seguro(linha, ['DATA', 'DT', 'DATA RECEBIMENTO', 'DATA RECEB', 'RECEBIMENTO'])
                 data_rec = parse_data(data_rec_raw)
                 data_venc = parse_data(vencimento)
-                data_rep = parse_data(get_valor_seguro(['DT REPAS', 'DT  REPAS', 'DATA REPASSE', 'REPASSE']))
+                data_rep = parse_data(get_valor_seguro(linha, ['DT REPAS', 'DT  REPAS', 'DATA REPASSE', 'REPASSE']))
 
                 sql_verifica = """
-                    SELECT id FROM tb_cheques 
+                    SELECT id FROM tb_cheques
                     WHERE banco = %s AND numero_cheque = %s AND emissor = %s AND data_bom_para = %s AND valor = %s
                 """
                 cursor.execute(sql_verifica, (banco, numero, emissor, data_venc, valor))
                 cheque_existente = cursor.fetchone()
-                
+
                 if not cheque_existente:
                     sql_insere = """
-                        INSERT INTO tb_cheques 
-                        (data_recebimento, cliente, emissor, cnpj_cpf, banco, numero_cheque, data_bom_para, valor, destino, data_repasse, observacoes, info_repasse) 
+                        INSERT INTO tb_cheques
+                        (data_recebimento, cliente, emissor, cnpj_cpf, banco, numero_cheque, data_bom_para, valor, destino, data_repasse, observacoes, info_repasse)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     cursor.execute(sql_insere, (data_rec, cliente, emissor, cnpj_cpf, banco, numero, data_venc, valor, destino, data_rep, obs, info_rep))
                 else:
                     id_cheque = cheque_existente['id']
                     sql_atualiza = """
-                        UPDATE tb_cheques 
-                        SET data_recebimento = %s, 
+                        UPDATE tb_cheques
+                        SET data_recebimento = %s,
                             cliente = %s,
                             cnpj_cpf = %s,
                             destino = %s,
-                            data_repasse = %s, 
+                            data_repasse = %s,
                             observacoes = %s,
                             info_repasse = %s
                         WHERE id = %s
@@ -762,158 +820,33 @@ def importar_excel_cheques():
 
             conexao.commit()
         conexao.close()
-        
+
     socketio.emit('atualizar_tela')
     return redirect(url_for('cheques'))
 
 @app.route('/exportar_excel_cheques', methods=['GET', 'POST'])
 @login_required
 def exportar_excel_cheques():
-    termo = request.args.get('pesquisa', '').strip()
-    banco_filtro = request.args.get('banco', '').strip()
-    status_filtro = request.args.get('status', '').strip()
-    data_inicio = request.args.get('data_inicio', '')
-    data_fim = request.args.get('data_fim', '')
-    filtro_emissor = request.args.get('filtro_emissor', '').strip()
-    filtro_rec_inicio = request.args.get('filtro_rec_inicio', '').strip()
-    filtro_rec_fim = request.args.get('filtro_rec_fim', '').strip()
-    filtro_venc_inicio = request.args.get('filtro_venc_inicio', '').strip()
-    filtro_venc_fim = request.args.get('filtro_venc_fim', '').strip()
-    filtro_valor_min = request.args.get('filtro_valor_min', '').strip()
-    filtro_valor_max = request.args.get('filtro_valor_max', '').strip()
-    filtro_numero_cheque = request.args.get('filtro_numero_cheque', '').strip()
-    filtro_destino = request.args.get('filtro_destino', '').strip()
-    filtro_rep_inicio = request.args.get('filtro_rep_inicio', '').strip()
-    filtro_rep_fim = request.args.get('filtro_rep_fim', '').strip()
+    query_base, params = montar_filtros_cheques()
 
-    query_base = "FROM tb_cheques WHERE 1=1"
-    params = []
-
-    if termo:
-        query_base += " AND (cliente LIKE %s OR emissor LIKE %s OR numero_cheque LIKE %s OR banco LIKE %s OR status_cheque LIKE %s)"
-        termo_like = f"%{termo}%"
-        params.extend([termo_like, termo_like, termo_like, termo_like, termo_like])
-        
-    if banco_filtro:
-        query_base += " AND banco = %s"
-        params.append(banco_filtro)
-
-    if status_filtro:
-        if status_filtro == 'Pendente':
-            query_base += " AND (status_cheque = 'Pendente' OR status_cheque IS NULL)"
-        else:
-            query_base += " AND status_cheque = %s"
-            params.append(status_filtro)
-            
-    if data_inicio:
-        query_base += " AND data_bom_para >= %s"
-        params.append(data_inicio)
-        
-    if data_fim:
-        query_base += " AND data_bom_para <= %s"
-        params.append(data_fim)
-
-    if filtro_emissor:
-        query_base += " AND (cliente LIKE %s OR emissor LIKE %s)"
-        params.extend([f"%{filtro_emissor}%", f"%{filtro_emissor}%"])
-        
-    if filtro_rec_inicio:
-        query_base += " AND data_recebimento >= %s"
-        params.append(filtro_rec_inicio)
-    if filtro_rec_fim:
-        query_base += " AND data_recebimento <= %s"
-        params.append(filtro_rec_fim)
-        
-    if filtro_venc_inicio:
-        query_base += " AND data_bom_para >= %s"
-        params.append(filtro_venc_inicio)
-    if filtro_venc_fim:
-        query_base += " AND data_bom_para <= %s"
-        params.append(filtro_venc_fim)
-        
-    if filtro_valor_min:
-        query_base += " AND valor >= %s"
-        params.append(filtro_valor_min)
-    if filtro_valor_max:
-        query_base += " AND valor <= %s"
-        params.append(filtro_valor_max)
-
-    if filtro_numero_cheque:
-        query_base += " AND numero_cheque LIKE %s"
-        params.append(f"%{filtro_numero_cheque}%")
-    
-    if filtro_destino:
-        termo_pesquisa = filtro_destino.strip()
-        partes_data = termo_pesquisa.split('/')
-        termo_sql_data = ""
-        if len(partes_data) == 3 and len(partes_data[2]) == 4:
-            termo_sql_data = f"{partes_data[2]}-{partes_data[1]}-{partes_data[0]}"
-        elif len(partes_data) == 2:
-            termo_sql_data = f"-{partes_data[1]}-{partes_data[0]}"
-
-        if termo_sql_data:
-            query_base += " AND (destino LIKE %s OR info_repasse LIKE %s OR data_repasse LIKE %s)"
-            termo_like = f"%{termo_pesquisa}%"
-            termo_data_like = f"%{termo_sql_data}%"
-            params.extend([termo_like, termo_like, termo_data_like])
-        else:
-            query_base += " AND (destino LIKE %s OR info_repasse LIKE %s OR CAST(data_repasse AS CHAR) LIKE %s)"
-            termo_like = f"%{termo_pesquisa}%"
-            params.extend([termo_like, termo_like, termo_like])
-
-    if filtro_rep_inicio:
-        query_base += " AND data_repasse >= %s"
-        params.append(filtro_rep_inicio)
-
-    if filtro_rep_fim:
-        query_base += " AND data_repasse <= %s"
-        params.append(filtro_rep_fim)
-        
     conexao = get_conexao()
     with conexao.cursor() as cursor:
         colunas_sql = "banco, numero_cheque, data_recebimento, cliente, emissor, cnpj_cpf, data_bom_para, valor, destino, data_repasse, observacoes, info_repasse, status_cheque"
         cursor.execute(f"SELECT {colunas_sql} {query_base} ORDER BY id ASC", tuple(params))
         dados = cursor.fetchall()
     conexao.close()
-    
-    df = pd.DataFrame(dados)
-    if not df.empty:
-        df.columns = ['Banco', 'Nº Cheque', 'Data Recebimento', 'Cliente', 'Emissor', 'CNPJ/CPF', 'Vencimento', 'Valor (R$)', 'Destino', 'Data Repasse', 'Observações Gerais', 'Info Repasse', 'Status']
-        ordem_da_empresa = [
-            'Data Recebimento', 
-            'Cliente',          
-            'Emissor',        
-            'CNPJ/CPF',         
-            'Banco',       
-            'Nº Cheque',            
-            'Vencimento',         
-            'Valor (R$)',        
-            'Destino',         
-            'Data Repasse',     
-            'Observações Gerais',
-            'Info Repasse',
-            'Status'
-        ]
-        
-        colunas_finais = [col for col in ordem_da_empresa if col in df.columns]
-        df = df[colunas_finais]
 
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Cheques Filtrados')
-    output.seek(0)
-    
-    return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name='cheques_filtrados.xlsx')
+    return gerar_excel_cheques(dados, 'Cheques Filtrados', 'cheques_filtrados.xlsx')
 
 
 @app.route('/exportar_cheques_selecionados', methods=['POST'])
 @login_required
 def exportar_cheques_selecionados():
     ids_selecionados = request.form.getlist('cheques_selecionados[]')
-    
+
     if not ids_selecionados:
         return redirect(request.referrer or url_for('cheques'))
-        
+
     conexao = get_conexao()
     with conexao.cursor() as cursor:
         placeholders = ', '.join(['%s'] * len(ids_selecionados))
@@ -923,34 +856,7 @@ def exportar_cheques_selecionados():
         dados = cursor.fetchall()
     conexao.close()
 
-    df = pd.DataFrame(dados)
-    if not df.empty:
-        df.columns = ['Banco', 'Nº Cheque', 'Data Recebimento', 'Cliente', 'Emissor', 'CNPJ/CPF', 'Vencimento', 'Valor (R$)', 'Destino', 'Data Repasse', 'Observações Gerais', 'Info Repasse', 'Status']
-        ordem_da_empresa = [
-            'Data Recebimento', 
-            'Cliente',          
-            'Emissor',        
-            'CNPJ/CPF',         
-            'Banco',       
-            'Nº Cheque',            
-            'Vencimento',         
-            'Valor (R$)',        
-            'Destino',         
-            'Data Repasse',     
-            'Observações Gerais',
-            'Info Repasse',
-            'Status'
-        ]
-        
-        colunas_finais = [col for col in ordem_da_empresa if col in df.columns]
-        df = df[colunas_finais]
-
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Cheques Selecionados')
-    output.seek(0)
-
-    return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name='cheques_selecionados.xlsx')
+    return gerar_excel_cheques(dados, 'Cheques Selecionados', 'cheques_selecionados.xlsx')
 
 @app.route('/exportar_romaneio', methods=['POST'])
 @login_required
@@ -976,9 +882,9 @@ def exportar_romaneio():
     with conexao.cursor() as cursor:
         placeholders = ', '.join(['%s'] * len(ids_selecionados))
         sql = f"""
-            SELECT banco, numero_cheque, cnpj_cpf, emissor, cliente, valor, data_bom_para 
-            FROM tb_cheques 
-            WHERE id IN ({placeholders}) 
+            SELECT banco, numero_cheque, cnpj_cpf, emissor, cliente, valor, data_bom_para
+            FROM tb_cheques
+            WHERE id IN ({placeholders})
             ORDER BY data_bom_para ASC, id ASC
         """
         cursor.execute(sql, tuple(ids_selecionados))
@@ -995,10 +901,10 @@ def exportar_romaneio():
         fonte_negrito = Font(name='Calibri', size=11, bold=True)
         preenchimento_cabecalho = PatternFill(start_color='D9D9D9', end_color='D9D9D9', fill_type='solid')
         preenchimento_amarelo = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
-        
+
         borda_fina = Side(border_style='thin', color='000000')
         borda_completa = Border(left=borda_fina, right=borda_fina, top=borda_fina, bottom=borda_fina)
-        
+
         alin_centro = Alignment(horizontal='center', vertical='center')
         alin_esquerda = Alignment(horizontal='left', vertical='center')
         alin_direita = Alignment(horizontal='right', vertical='center')
@@ -1053,7 +959,7 @@ def exportar_romaneio():
 
         # 4. Linha de Total (1 linha em branco após a tabela)
         linha_total = linha_atual + 1
-        
+
         cel_label_total = ws.cell(row=linha_total, column=4, value='TOTAL')
         cel_label_total.font = fonte_negrito
         cel_label_total.alignment = alin_esquerda
@@ -1068,7 +974,7 @@ def exportar_romaneio():
 
         # 5. Rodapé com Dados do Destinatário
         linha_rodape = linha_total + 1
-        
+
         ws.cell(row=linha_rodape, column=1, value='DESTINATÁRIO:').font = fonte_padrao
         ws.cell(row=linha_rodape, column=3, value=destinatario).font = fonte_padrao
 
@@ -1088,7 +994,7 @@ def exportar_romaneio():
     output.seek(0)
     nome_arquivo = f"romaneio_{data_romaneio_fmt.replace('/', '-')}.xlsx"
     return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name=nome_arquivo)
-    
+
 @app.route('/atualizar_status_cheque/<int:id_cheque>/<status>', methods=['POST'])
 @login_required
 def atualizar_status_cheque(id_cheque, status):
@@ -1099,13 +1005,13 @@ def atualizar_status_cheque(id_cheque, status):
                 cursor.execute("UPDATE tb_cheques SET status_cheque = %s, data_repasse = NULL WHERE id = %s", (status, id_cheque))
             else:
                 cursor.execute("UPDATE tb_cheques SET status_cheque = %s WHERE id = %s", (status, id_cheque))
-            
+
             conexao.commit()
             registrar_log("ALTEROU STATUS", f"Mudou o status do cheque ID {id_cheque} para {status}")
         conexao.close()
-        
+
         socketio.emit('atualizar_tela')
-        
+
     return redirect(request.referrer or url_for('cheques'))
 
 @app.route('/deletar_cheque/<int:id_cheque>', methods=['POST'])
@@ -1118,9 +1024,9 @@ def deletar_cheque(id_cheque):
         conexao.commit()
         registrar_log("EXCLUIU CHEQUE", f"Apagou o cheque ID: {id_cheque}")
     conexao.close()
-    
+
     socketio.emit('atualizar_tela')
-    
+
     # Redireciona mantendo os parâmetros de filtro da página anterior
     return redirect(request.referrer or url_for('cheques'))
 
@@ -1129,7 +1035,7 @@ def deletar_cheque(id_cheque):
 @admin_required
 def deletar_cheques_lote():
     ids_selecionados = request.form.getlist('cheques_selecionados[]')
-    
+
     if ids_selecionados:
         conexao = get_conexao()
         with conexao.cursor() as cursor:
@@ -1140,7 +1046,7 @@ def deletar_cheques_lote():
             registrar_log("EXCLUIU CHEQUES EM LOTE", f"Apagou {len(ids_selecionados)} cheque(s).")
         conexao.close()
         socketio.emit('atualizar_tela')
-        
+
     return redirect(request.referrer or url_for('cheques'))
 
 @app.route('/editar_cheque/<int:id_cheque>', methods=['POST'])
@@ -1162,16 +1068,16 @@ def editar_cheque(id_cheque):
     conexao = get_conexao()
     with conexao.cursor() as cursor:
         sql = """
-            UPDATE tb_cheques 
-            SET data_recebimento = %s, cliente = %s, emissor = %s, cnpj_cpf = %s, banco = %s, 
-                numero_cheque = %s, data_bom_para = %s, valor = %s, destino = %s, data_repasse = %s, 
-                observacoes = %s, info_repasse = %s 
+            UPDATE tb_cheques
+            SET data_recebimento = %s, cliente = %s, emissor = %s, cnpj_cpf = %s, banco = %s,
+                numero_cheque = %s, data_bom_para = %s, valor = %s, destino = %s, data_repasse = %s,
+                observacoes = %s, info_repasse = %s
             WHERE id = %s
         """
         cursor.execute(sql, (data_rec, cliente, emissor, cnpj_cpf, banco, numero_cheque, data_bom_para, valor, destino, data_repasse, observacoes, info_repasse, id_cheque))
         conexao.commit()
     conexao.close()
-    
+
     socketio.emit('atualizar_tela')
     return redirect(request.referrer or url_for('cheques'))
 
@@ -1208,14 +1114,14 @@ def adicionar_usuario():
     usuario = request.form.get('usuario')
     senha = request.form.get('senha')
     nivel = request.form.get('nivel')
-    
+
     conexao = get_conexao()
     with conexao.cursor() as cursor:
         sql = "INSERT INTO tb_usuarios (nome, usuario, senha, nivel) VALUES (%s, %s, %s, %s)"
         cursor.execute(sql, (nome, usuario, senha, nivel))
         conexao.commit()
     conexao.close()
-    
+
     registrar_log("CADASTROU USUÁRIO", f"Criou o usuário '{usuario}' com nível '{nivel}'")
     return redirect(url_for('usuarios'))
 
@@ -1225,13 +1131,13 @@ def adicionar_usuario():
 def deletar_usuario(id_usuario):
     if id_usuario == session.get('usuario_id'):
         return "Você não pode excluir seu próprio usuário.", 400
-    
+
     conexao = get_conexao()
     with conexao.cursor() as cursor:
         cursor.execute("DELETE FROM tb_usuarios WHERE id = %s", (id_usuario,))
         conexao.commit()
     conexao.close()
-    
+
     registrar_log("EXCLUIU USUÁRIO", f"Removeu o usuário ID: {id_usuario}")
     return redirect(url_for('usuarios'))
 
@@ -1241,19 +1147,16 @@ def alterar_senha():
     senha_atual = request.form.get('senha_atual')
     nova_senha = request.form.get('nova_senha')
     usuario_id = session.get('usuario_id')
-    
+
     conexao = get_conexao()
     with conexao.cursor() as cursor:
         cursor.execute("SELECT * FROM tb_usuarios WHERE id = %s AND senha = %s", (usuario_id, senha_atual))
         usuario = cursor.fetchone()
-        
+
         if usuario:
             cursor.execute("UPDATE tb_usuarios SET senha = %s WHERE id = %s", (nova_senha, usuario_id))
             conexao.commit()
-            sucesso = "Senha alterada com sucesso!"
-        else:
-            erro = "A senha atual está incorreta."
-            
+
     conexao.close()
     return redirect(request.referrer or url_for('dashboard'))
 
@@ -1261,19 +1164,19 @@ def alterar_senha():
 @login_required
 def editar_cheques_lote():
     ids_selecionados = request.form.getlist('cheques_selecionados[]')
-    
+
     if not ids_selecionados:
         return redirect(request.referrer or url_for('cheques'))
-        
+
     destino = request.form.get('destino_lote', '').strip()
     data_repasse = request.form.get('data_repasse_lote', '').strip()
     status = request.form.get('status_lote', '').strip()
     info_repasse = request.form.get('info_repasse_lote', '').strip()
     observacoes = request.form.get('observacoes_lote', '').strip()
-    
+
     updates = []
     params = []
-    
+
     # Monta a query dinamicamente (só atualiza o que o usuário preencheu)
     if destino:
         updates.append("destino = %s")
@@ -1292,11 +1195,11 @@ def editar_cheques_lote():
         params.append(status)
         if status == 'Pendente':
             updates.append("data_repasse = NULL") # Limpa a data se voltar pra pendente
-            
+
     if updates:
         sql = f"UPDATE tb_cheques SET {', '.join(updates)} WHERE id IN ({', '.join(['%s']*len(ids_selecionados))})"
         params.extend(ids_selecionados)
-        
+
         conexao = get_conexao()
         with conexao.cursor() as cursor:
             cursor.execute(sql, tuple(params))
@@ -1304,7 +1207,7 @@ def editar_cheques_lote():
             registrar_log("EDITOU CHEQUES EM LOTE", f"Atualizou {len(ids_selecionados)} cheque(s) em lote.")
         conexao.close()
         socketio.emit('atualizar_tela')
-        
+
     return redirect(request.referrer or url_for('cheques'))
 
 
